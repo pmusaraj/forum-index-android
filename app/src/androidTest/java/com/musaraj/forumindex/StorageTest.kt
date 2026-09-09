@@ -29,7 +29,7 @@ class StorageTest {
 
     @Test fun preferencesRoundTripUserOwnedCollectionsAndDeviceName() {
         val stars = listOf(
-            StarredTopic("Title \"one\"", "https://forum.test/t/1", "Forum", 11),
+            StarredTopic("Title \"one\"", "https://forum.test/t/1", "Forum", 11, forumId = 3),
             StarredTopic("Two", "https://other.test/t/2", "Other", 22),
         )
         preferences.visibleSubjectOrder = listOf("main-feed", "parent:ai")

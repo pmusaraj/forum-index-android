@@ -19,19 +19,35 @@ data class StarredTopic(
     val url: String,
     val forumName: String,
     val topicId: Int,
+    val forumId: Int? = null,
 )
 
-class ForumIndexPreferences(context: Context) {
+interface PreferencesStore {
+    var visibleSubjectOrder: List<String>
+    var stars: List<StarredTopic>
+    var openedTopicIds: Set<String>
+    var deviceNameOverride: String?
+    fun markOpened(forumId: Int, topicId: Int)
+    fun isOpened(forumId: Int, topicId: Int): Boolean
+}
+
+class ForumIndexPreferences(context: Context) : PreferencesStore {
     private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
-    var visibleSubjectOrder: List<String>
+    override var visibleSubjectOrder: List<String>
         get() = readArray(SUBJECTS) { getString(it) }
         set(value) = writeArray(SUBJECTS, JSONArray(value))
 
-    var stars: List<StarredTopic>
+    override var stars: List<StarredTopic>
         get() = readArray(STARS) { index ->
             getJSONObject(index).let {
-                StarredTopic(it.getString("title"), it.getString("url"), it.getString("forum_name"), it.getInt("topic_id"))
+                StarredTopic(
+                    it.getString("title"),
+                    it.getString("url"),
+                    it.getString("forum_name"),
+                    it.getInt("topic_id"),
+                    it.optInt("forum_id").takeIf { _ -> it.has("forum_id") },
+                )
             }
         }
         set(value) = writeArray(STARS, JSONArray().also { array -> value.forEach { star ->
@@ -39,14 +55,15 @@ class ForumIndexPreferences(context: Context) {
                 .put("title", star.title)
                 .put("url", star.url)
                 .put("forum_name", star.forumName)
-                .put("topic_id", star.topicId))
+                .put("topic_id", star.topicId)
+                .also { if (star.forumId != null) it.put("forum_id", star.forumId) })
         } })
 
-    var openedTopicIds: Set<String>
+    override var openedTopicIds: Set<String>
         get() = readArray(OPENED) { getString(it) }.toSet()
         set(value) = writeArray(OPENED, JSONArray(value.sorted()))
 
-    var deviceNameOverride: String?
+    override var deviceNameOverride: String?
         get() = try {
             preferences.getString(DEVICE_NAME, null)
         } catch (_: ClassCastException) {
@@ -59,11 +76,11 @@ class ForumIndexPreferences(context: Context) {
             }.apply()
         }
 
-    fun markOpened(forumId: Int, topicId: Int) {
+    override fun markOpened(forumId: Int, topicId: Int) {
         openedTopicIds = openedTopicIds + "$forumId:$topicId"
     }
 
-    fun isOpened(forumId: Int, topicId: Int) = "$forumId:$topicId" in openedTopicIds
+    override fun isOpened(forumId: Int, topicId: Int) = "$forumId:$topicId" in openedTopicIds
 
     private fun <T> readArray(key: String, value: JSONArray.(Int) -> T): List<T> {
         return try {
@@ -88,10 +105,16 @@ class ForumIndexPreferences(context: Context) {
     }
 }
 
-class SecureTokenStore(context: Context) {
+interface EnrollmentStore {
+    fun save(enrollment: Enrollment)
+    fun load(): Enrollment?
+    fun delete()
+}
+
+class SecureTokenStore(context: Context) : EnrollmentStore {
     private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
-    fun save(enrollment: Enrollment) {
+    override fun save(enrollment: Enrollment) {
         require(enrollment.token.isNotBlank() && enrollment.token.none(Char::isISOControl)) { "invalid token" }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, key())
@@ -103,7 +126,7 @@ class SecureTokenStore(context: Context) {
             .apply()
     }
 
-    fun load(): Enrollment? {
+    override fun load(): Enrollment? {
         return try {
             val encoded = preferences.getString(TOKEN, null) ?: return signedOut()
             val metadata = preferences.getString(INSTALLATION, null) ?: return signedOut()
@@ -119,7 +142,7 @@ class SecureTokenStore(context: Context) {
         }
     }
 
-    fun delete() {
+    override fun delete() {
         preferences.edit().clear().apply()
     }
 
