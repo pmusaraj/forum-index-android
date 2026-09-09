@@ -2,6 +2,7 @@ package com.musaraj.forumindex
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,8 +27,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -35,13 +38,17 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -102,6 +109,11 @@ internal fun ForumIndexReader(
     onOpenStarred: (StarredTopic) -> Unit = {},
     onRemoveStar: (StarredTopic) -> Unit = {},
     onSettings: () -> Unit = {},
+    defaultDeviceName: String = Build.MODEL,
+    onEnroll: (String, String) -> Unit = { _, _ -> },
+    onRefreshContribution: () -> Unit = {},
+    onUpdateDevice: (String) -> Unit = {},
+    onOptOut: () -> Unit = {},
 ) {
     val visible = uiState.visibleDestinations
     if (visible.isEmpty()) {
@@ -113,6 +125,7 @@ internal fun ForumIndexReader(
 
     var subjectsOpen by rememberSaveable { mutableStateOf(false) }
     var starsOpen by rememberSaveable { mutableStateOf(false) }
+    var contributionOpen by rememberSaveable { mutableStateOf(false) }
     var explicitReportTopicId by rememberSaveable { mutableStateOf<Int?>(null) }
     val selectedIndex = visible.indexOfFirst { it.id == uiState.selectedDestination?.id }.coerceAtLeast(0)
     val pager = rememberPagerState(initialPage = selectedIndex) { visible.size }
@@ -133,7 +146,10 @@ internal fun ForumIndexReader(
     }
 
     Column(Modifier.fillMaxSize().background(ReaderBackground)) {
-        ReaderHeader(onStars = { starsOpen = true; onStars() }, onSettings = onSettings)
+        ReaderHeader(
+            onStars = { starsOpen = true; onStars() },
+            onSettings = { contributionOpen = true; onSettings() },
+        )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             LazyRow(
                 modifier = Modifier.weight(1f).height(48.dp).testTag("subject-tabs"),
@@ -192,7 +208,10 @@ internal fun ForumIndexReader(
                     onOpenTopic = onOpenTopic,
                     onToggleStar = onToggleStar,
                     onReport = { topic, kind ->
-                        if (uiState.contribution.enrollment == null) onNeedsEnrollment() else {
+                        if (uiState.contribution.enrollment == null) {
+                            contributionOpen = true
+                            onNeedsEnrollment()
+                        } else {
                             explicitReportTopicId = topic.id
                             onReport(topic, kind)
                         }
@@ -211,6 +230,15 @@ internal fun ForumIndexReader(
         )
     }
     if (starsOpen) StarredSheet(stars, { starsOpen = false }, onOpenStarred, onRemoveStar)
+    if (contributionOpen) ContributionSheet(
+        state = uiState.contribution,
+        defaultDeviceName = defaultDeviceName,
+        onDismiss = { contributionOpen = false },
+        onEnroll = onEnroll,
+        onRefresh = onRefreshContribution,
+        onUpdateDevice = onUpdateDevice,
+        onOptOut = onOptOut,
+    )
 
     val explicitReportState = explicitReportTopicId?.let(uiState.contribution.reports::get)
     LaunchedEffect(explicitReportState) {
@@ -243,10 +271,152 @@ private fun ReaderHeader(onStars: () -> Unit, onSettings: () -> Unit) {
             Text("☆", fontSize = 28.sp, modifier = Modifier.semantics { contentDescription = "Starred topics" })
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings")
+            Icon(Icons.Default.Settings, contentDescription = "Contribution settings")
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ContributionSheet(
+    state: ContributionState,
+    defaultDeviceName: String,
+    onDismiss: () -> Unit,
+    onEnroll: (String, String) -> Unit,
+    onRefresh: () -> Unit,
+    onUpdateDevice: (String) -> Unit,
+    onOptOut: () -> Unit,
+) {
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var deviceName by rememberSaveable { mutableStateOf(defaultDeviceName.cappedLabel()) }
+    var confirmOptOut by rememberSaveable { mutableStateOf(false) }
+    val installation = state.enrollment?.installation
+
+    LaunchedEffect(installation?.deviceName) {
+        if (installation != null) deviceName = installation.deviceName.cappedLabel()
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = ReaderBackground,
+    ) {
+        Column(
+            Modifier.fillMaxHeight(.92f).fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp).testTag("contribution-sheet"),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Contributions", Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(48.dp).semantics { contentDescription = "Close contribution settings" },
+                ) { Text("×", fontSize = 24.sp) }
+            }
+
+            if (installation == null) {
+                Text("Optionally share simple topic actions to improve the public index.")
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { displayName = it.cappedLabel() },
+                    label = { Text("Display name") },
+                    singleLine = true,
+                    enabled = !state.loading,
+                    modifier = Modifier.fillMaxWidth().testTag("display-name"),
+                    supportingText = { Text("Required · 100 characters maximum") },
+                )
+                OutlinedTextField(
+                    value = deviceName,
+                    onValueChange = { deviceName = it.cappedLabel() },
+                    label = { Text("Device name") },
+                    singleLine = true,
+                    enabled = !state.loading,
+                    modifier = Modifier.fillMaxWidth().testTag("device-name"),
+                    supportingText = { Text("Required · 100 characters maximum") },
+                )
+                Button(
+                    onClick = { onEnroll(displayName.trim(), deviceName.trim()) },
+                    enabled = !state.loading && displayName.validLabel() && deviceName.validLabel(),
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("enable-contributions"),
+                ) { Text("Enable contributions") }
+            } else {
+                Text(if (installation.trusted) "Trusted contributor" else "Public contributor", fontWeight = FontWeight.SemiBold)
+                Text(if (installation.deviceVerified) "Device verified" else "Device unverified")
+                TextButton(
+                    onClick = onRefresh,
+                    enabled = !state.loading,
+                    modifier = Modifier.height(48.dp).testTag("refresh-contribution-status"),
+                ) { Text("Refresh status") }
+                OutlinedTextField(
+                    value = deviceName,
+                    onValueChange = { deviceName = it.cappedLabel() },
+                    label = { Text("Device name") },
+                    singleLine = true,
+                    enabled = !state.loading,
+                    modifier = Modifier.fillMaxWidth().testTag("contribution-device-name"),
+                    supportingText = { Text("Required · 100 characters maximum") },
+                )
+                Button(
+                    onClick = { onUpdateDevice(deviceName.trim()) },
+                    enabled = !state.loading && deviceName.validLabel() && deviceName.trim() != installation.deviceName,
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("save-device-name"),
+                ) { Text("Save") }
+            }
+
+            if (state.loading) {
+                Row(
+                    Modifier.fillMaxWidth().height(48.dp).testTag("contribution-loading"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text("Working…")
+                }
+            }
+            state.error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, maxLines = 3, modifier = Modifier.padding(vertical = 8.dp))
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
+            Text("Transparency", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            listOf("Star changes", "Reads", "Low quality reports", "Inappropriate reports", "Wrong subject reports").forEach {
+                Text(it, Modifier.fillMaxWidth().padding(vertical = 5.dp))
+            }
+            Text(
+                "Opening a topic reports a read. Stars stay local. Actions are sent only while contributions are enabled.",
+                color = Color.Black.copy(alpha = .65f), fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
+            )
+            if (installation != null) {
+                TextButton(
+                    onClick = { confirmOptOut = true },
+                    enabled = !state.loading,
+                    modifier = Modifier.height(48.dp).testTag("opt-out"),
+                ) { Text("Opt out") }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    if (confirmOptOut) AlertDialog(
+        onDismissRequest = { confirmOptOut = false },
+        title = { Text("Confirm opt out") },
+        text = { Text("Stop sending contribution actions? Your local stars will remain on this device.") },
+        dismissButton = {
+            TextButton(onClick = { confirmOptOut = false }, modifier = Modifier.height(48.dp)) { Text("Keep contributions") }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { confirmOptOut = false; onOptOut() },
+                modifier = Modifier.height(48.dp).testTag("confirm-opt-out"),
+            ) { Text("Opt out") }
+        },
+    )
+}
+
+private fun String.validLabel() = trim().let { it.isNotEmpty() && it.codePointCount(0, it.length) <= CONTRIBUTION_LABEL_MAX }
+
+private fun String.cappedLabel(): String = if (codePointCount(0, length) <= CONTRIBUTION_LABEL_MAX) this
+else substring(0, offsetByCodePoints(0, CONTRIBUTION_LABEL_MAX))
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -586,3 +756,4 @@ private fun Destination.tabTag() = when (this) {
 
 private const val MAX_ICON_BYTES = 256 * 1024L
 private const val MAX_ICON_DIMENSION = 1024
+private const val CONTRIBUTION_LABEL_MAX = 100

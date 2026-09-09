@@ -6,6 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -13,6 +16,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -147,6 +152,94 @@ class TopicInteractionUiTest {
         compose.onNodeWithText("No starred topics").assertIsDisplayed()
     }
 
+    @Test fun settingsAndReportGateOpenTheSameEnrollmentSheet() {
+        compose.setContent { ForumIndexReader(state(listOf(topic())), defaultDeviceName = "Test phone") }
+        compose.onNodeWithContentDescription("Contribution settings").performClick()
+        compose.onNodeWithText("Enable contributions").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close contribution settings").performClick()
+        compose.onNodeWithTag("topic-10-1").performTouchInput { longClick() }
+        compose.onNodeWithText("Low quality").performClick()
+        compose.onNodeWithText("Enable contributions").assertIsDisplayed()
+    }
+
+    @Test fun enrollmentValidatesCodePointsAndSubmitsTrimmedValues() {
+        var submitted: Pair<String, String>? = null
+        compose.setContent {
+            ForumIndexReader(
+                state(listOf(topic())), defaultDeviceName = " Test phone ",
+                onEnroll = { display, device -> submitted = display to device },
+            )
+        }
+        compose.onNodeWithContentDescription("Contribution settings").performClick()
+        compose.onNodeWithTag("enable-contributions").assertIsNotEnabled()
+        compose.onNodeWithTag("display-name").performTextInput("  Ada  ")
+        compose.onNodeWithTag("enable-contributions").assertIsEnabled()
+        compose.onNodeWithTag("display-name").performTextClearance()
+        compose.onNodeWithTag("display-name").performTextInput("😀".repeat(101))
+        compose.onNodeWithTag("display-name").assertTextContains("😀".repeat(100))
+        compose.onNodeWithTag("display-name").performTextClearance()
+        compose.onNodeWithTag("display-name").performTextInput("  Ada  ")
+        compose.onNodeWithTag("device-name").performTextClearance()
+        compose.onNodeWithTag("enable-contributions").assertIsNotEnabled()
+        compose.onNodeWithTag("device-name").performTextInput("  Pixel  ")
+        compose.onNodeWithTag("enable-contributions").performClick()
+        compose.runOnIdle { assertEquals("Ada" to "Pixel", submitted) }
+    }
+
+    @Test fun contributorStatusRenameAndTransparencyUseNeutralExactCopy() {
+        var renamed: String? = null
+        var refreshed = 0
+        var ui by mutableStateOf(state(listOf(topic()), enrolled = true))
+        compose.setContent {
+            ForumIndexReader(ui, onRefreshContribution = { refreshed++ }, onUpdateDevice = { renamed = it })
+        }
+        compose.onNodeWithContentDescription("Contribution settings").performClick()
+        compose.onNodeWithText("Public contributor").assertIsDisplayed()
+        compose.onNodeWithText("Device unverified").assertIsDisplayed()
+        compose.onNodeWithText("Refresh status").performClick()
+        compose.runOnIdle { assertEquals(1, refreshed) }
+        compose.onNodeWithTag("contribution-device-name").performTextClearance()
+        compose.onNodeWithTag("contribution-device-name").performTextInput("  Tablet  ")
+        compose.onNodeWithTag("save-device-name").performClick()
+        compose.runOnIdle { assertEquals("Tablet", renamed) }
+        listOf("Star changes", "Reads", "Low quality reports", "Inappropriate reports", "Wrong subject reports")
+            .forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("Opening a topic reports a read. Stars stay local. Actions are sent only while contributions are enabled.").assertExists()
+        listOf("Device ID", "Public ID", "Apple", "Play Integrity", "ranking", "Up votes", "Down votes")
+            .forEach { compose.onNodeWithText(it, substring = true, ignoreCase = true).assertDoesNotExist() }
+        compose.runOnIdle {
+            val enrollment = ui.contribution.enrollment!!
+            ui = ui.copy(contribution = ui.contribution.copy(enrollment = enrollment.copy(
+                installation = enrollment.installation.copy(trusted = true, deviceVerified = true, deviceName = "Server name"),
+            )))
+        }
+        compose.onNodeWithText("Trusted contributor").assertIsDisplayed()
+        compose.onNodeWithText("Device verified").assertIsDisplayed()
+        compose.onNodeWithTag("contribution-device-name").assertTextContains("Server name")
+    }
+
+    @Test fun optOutRequiresConfirmationAndKeepsLocalStarsAfterSignOut() {
+        var optOuts = 0
+        var ui by mutableStateOf(state(listOf(topic()), enrolled = true))
+        val saved = listOf(star())
+        compose.setContent { ForumIndexReader(ui, stars = saved, onOptOut = { optOuts++ }) }
+        compose.onNodeWithContentDescription("Contribution settings").performClick()
+        compose.onNodeWithText("Opt out").performClick()
+        compose.runOnIdle { assertEquals(0, optOuts) }
+        compose.onNodeWithText("Confirm opt out").assertIsDisplayed()
+        compose.onNodeWithText("Keep contributions").performClick()
+        compose.runOnIdle { assertEquals(0, optOuts) }
+        compose.onNodeWithText("Opt out").performClick()
+        compose.onNodeWithTag("confirm-opt-out").performClick()
+        compose.runOnIdle {
+            assertEquals(1, optOuts)
+            ui = ui.copy(contribution = ui.contribution.copy(enrollment = null))
+        }
+        compose.onNodeWithContentDescription("Close contribution settings").performClick()
+        compose.onNodeWithContentDescription("Starred topics").performClick()
+        compose.onNodeWithTag("starred-10-1").assertIsDisplayed()
+    }
+
     private fun state(topics: List<Topic>, enrolled: Boolean = false) = UiState(
         taxonomy = TaxonomyState.Loaded(emptyList()),
         allDestinations = listOf(Destination.Main),
@@ -154,7 +247,7 @@ class TopicInteractionUiTest {
         selectedDestination = Destination.Main,
         feeds = mapOf(Destination.Main.id to FeedState.Loaded(topics, 1, false)),
         contribution = ContributionState(
-            enrollment = if (enrolled) Enrollment("token", Installation("id", "Name", "Phone", false, true)) else null,
+            enrollment = if (enrolled) Enrollment("token", Installation("id", "Name", "Phone", false, false)) else null,
             loading = false,
         ),
     )

@@ -68,7 +68,10 @@ class MainActivity : ComponentActivity() {
                     },
                     onToggleStar = model::toggleStar,
                     onReport = { topic, kind -> model.report(topic.id, kind, true) },
-                    onNeedsEnrollment = {}, // Task 6 owns the enrollment sheet.
+                    onEnroll = { displayName, deviceName -> model.enroll(displayName, deviceName) },
+                    onRefreshContribution = model::refreshEnrollment,
+                    onUpdateDevice = { model.updateDevice(it) },
+                    onOptOut = model::optOut,
                     onOpenStarred = { star ->
                         val url = try { validTopicUrl(URL(star.url)) } catch (_: Exception) { null }
                         if (url != null) {
@@ -77,7 +80,6 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onRemoveStar = model::removeStar,
-                    onSettings = {},
                 )
                 openTopic?.let { topic ->
                     TopicWebView(
