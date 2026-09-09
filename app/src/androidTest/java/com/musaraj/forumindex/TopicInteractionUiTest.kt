@@ -1,0 +1,169 @@
+package com.musaraj.forumindex
+
+import android.content.ActivityNotFoundException
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import java.net.URL
+
+class TopicInteractionUiTest {
+    @get:Rule val compose = createComposeRule()
+
+    @Test fun viewerHasOnlyShareStarCloseChromeWithoutNetwork() {
+        compose.setContent { TopicWebView(topic(), false, {}, {}, "<html><body>fixture</body></html>") }
+        val share = compose.onNodeWithContentDescription("Share")
+        val star = compose.onNodeWithContentDescription("Star")
+        val close = compose.onNodeWithContentDescription("Close")
+        compose.onAllNodesWithContentDescription("Share").assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Star").assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Close").assertCountEquals(1)
+        val shareBounds = share.fetchSemanticsNode().boundsInRoot
+        val starBounds = star.fetchSemanticsNode().boundsInRoot
+        val closeBounds = close.fetchSemanticsNode().boundsInRoot
+        assertEquals(shareBounds.center.x, starBounds.center.x, 1f)
+        assertEquals(starBounds.center.x, closeBounds.center.x, 1f)
+        assertTrue(shareBounds.bottom < starBounds.top)
+        assertTrue(starBounds.bottom < closeBounds.top)
+        assertTrue(listOf(shareBounds, starBounds, closeBounds).all { it.width >= 44 * compose.density.density })
+        compose.onNodeWithText("Votes").assertDoesNotExist()
+        compose.onNodeWithText("Open browser").assertDoesNotExist()
+        compose.onNodeWithText("Tray").assertDoesNotExist()
+    }
+
+    @Test fun missingExternalBrowserIsHandledWithoutCrash() {
+        val opened = openExternalTopic(URL("https://forum.example/t/1")) { throw ActivityNotFoundException() }
+        assertFalse(opened)
+    }
+
+    @Test fun invalidUrlCannotOpenOrStarButValidStarTogglesImmediately() {
+        var opened = false
+        var stars = emptyList<StarredTopic>()
+        var validStarred by mutableStateOf(false)
+        val invalid = topic(1).copy(url = URL("http://forum.example/t/1"))
+        compose.setContent {
+            ForumIndexReader(
+                state(listOf(invalid, topic(2))),
+                stars = stars,
+                isStarred = { it.id == 2 && validStarred },
+                onOpenTopic = { opened = true },
+                onToggleStar = { validStarred = !validStarred },
+            )
+        }
+        compose.onNodeWithTag("topic-10-1").performClick()
+        compose.onNodeWithTag("topic-10-1").performTouchInput { longClick() }
+        compose.onNodeWithText("Star").assertDoesNotExist()
+        compose.onNodeWithText("Low quality").assertIsDisplayed()
+        compose.onNodeWithText("Low quality").performClick()
+        compose.onNodeWithTag("topic-10-2").performTouchInput { longClick() }
+        compose.onNodeWithText("Star").performClick()
+        compose.onNodeWithTag("topic-10-2").performTouchInput { longClick() }
+        compose.onNodeWithText("Unstar").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertFalse(opened); assertFalse(validStarred) }
+    }
+
+    @Test fun longPressOffersOnlyReportsAndGatesEnrollment() {
+        var enrollmentRequests = 0
+        var reports = emptyList<String>()
+        var enrolled by mutableStateOf(false)
+        compose.setContent {
+            ForumIndexReader(
+                state(listOf(topic()), enrolled),
+                onNeedsEnrollment = { enrollmentRequests++ },
+                onReport = { _, kind -> reports += kind },
+            )
+        }
+        compose.onNodeWithTag("topic-10-1").performTouchInput { longClick() }
+        compose.onNodeWithText("Inappropriate").performClick()
+        compose.runOnIdle { assertEquals(1, enrollmentRequests); assertTrue(reports.isEmpty()) }
+        enrolled = true
+        compose.onNodeWithTag("topic-10-1").performTouchInput { longClick() }
+        compose.onNodeWithText("Wrong subject").performClick()
+        compose.runOnIdle { assertEquals(listOf("wrong_subject"), reports) }
+        compose.onNodeWithText("Vote").assertDoesNotExist()
+    }
+
+    @Test fun failedReportShowsConciseAlert() {
+        var state by mutableStateOf(state(listOf(topic()), enrolled = true))
+        compose.setContent {
+            ForumIndexReader(
+                state,
+                onReport = { topic, _ ->
+                    state = state.copy(contribution = state.contribution.copy(
+                        reports = mapOf(topic.id to ReportState.Failed("Try again")),
+                    ))
+                },
+            )
+        }
+        compose.onNodeWithTag("topic-10-1").performTouchInput { longClick() }
+        compose.onNodeWithText("Low quality").performClick()
+        compose.onNodeWithText("Report failed").assertIsDisplayed()
+        compose.onNodeWithText("Try again").assertIsDisplayed()
+    }
+
+    @Test fun backgroundStarOrReadFailureDoesNotShowAReportAlert() {
+        compose.setContent {
+            ForumIndexReader(state(listOf(topic()), enrolled = true).copy(
+                contribution = ContributionState(
+                    enrollment = Enrollment("token", Installation("id", "Name", "Phone", false, true)),
+                    loading = false,
+                    reports = mapOf(1 to ReportState.Failed("Try again")),
+                ),
+            ))
+        }
+        compose.onNodeWithText("Report failed").assertDoesNotExist()
+    }
+
+    @Test fun starredSheetShowsEmptyThenOpensAndRemovesCompositeRow() {
+        var stars by mutableStateOf(emptyList<StarredTopic>())
+        var opened: StarredTopic? = null
+        compose.setContent {
+            ForumIndexReader(
+                state(listOf(topic())), stars = stars,
+                onOpenStarred = { opened = it },
+                onRemoveStar = { removed -> stars = stars.filterNot { it.forumId == removed.forumId && it.topicId == removed.topicId } },
+            )
+        }
+        compose.onNodeWithContentDescription("Starred topics").performClick()
+        compose.onNodeWithText("No starred topics").assertIsDisplayed()
+        compose.runOnIdle { stars = listOf(star()) }
+        compose.onNodeWithTag("starred-10-1").performClick()
+        compose.runOnIdle { assertEquals(star(), opened) }
+        compose.onNodeWithContentDescription("Remove Fixture topic").performClick()
+        compose.onNodeWithText("No starred topics").assertIsDisplayed()
+    }
+
+    private fun state(topics: List<Topic>, enrolled: Boolean = false) = UiState(
+        taxonomy = TaxonomyState.Loaded(emptyList()),
+        allDestinations = listOf(Destination.Main),
+        visibleDestinations = listOf(Destination.Main),
+        selectedDestination = Destination.Main,
+        feeds = mapOf(Destination.Main.id to FeedState.Loaded(topics, 1, false)),
+        contribution = ContributionState(
+            enrollment = if (enrolled) Enrollment("token", Installation("id", "Name", "Phone", false, true)) else null,
+            loading = false,
+        ),
+    )
+
+    companion object {
+        private fun topic(id: Int = 1) = Topic(
+            id, "Fixture topic", URL("https://forum.example/t/$id"), null,
+            ForumSummary(10, "Fixture forum", "fixture", null, null), null, 0,
+        )
+        private fun star() = StarredTopic("Fixture topic", "https://forum.example/t/1", "Fixture forum", 1, 10)
+    }
+}

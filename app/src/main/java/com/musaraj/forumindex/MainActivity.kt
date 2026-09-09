@@ -1,6 +1,5 @@
 package com.musaraj.forumindex
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -18,11 +17,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.net.URL
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,24 +47,46 @@ class MainActivity : ComponentActivity() {
                 }
                 val model: ForumIndexViewModel = viewModel(factory = factory)
                 val state by model.uiState.collectAsState()
+                val stars by model.stars.collectAsState()
+                var openTopic by remember { mutableStateOf<Topic?>(null) }
                 LaunchedEffect(model) { model.launch() }
                 ForumIndexReader(
                     uiState = state,
+                    stars = stars,
                     isOpened = model::isOpened,
+                    isStarred = model::isStarred,
                     onSelect = model::select,
                     onUpdateVisibleOrder = model::updateVisibleOrder,
                     onRefresh = { model.refreshFeed(it) },
                     onRetry = { model.retry(it) },
                     onLoadNextPage = { model.loadNextPage(it) },
                     onOpenTopic = { topic ->
-                        topic.url?.let { url ->
+                        validTopicUrl(topic.url)?.let {
                             model.markOpened(topic)
-                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url.toString())))
+                            openTopic = topic
                         }
                     },
-                    onStars = {},
+                    onToggleStar = model::toggleStar,
+                    onReport = { topic, kind -> model.report(topic.id, kind, true) },
+                    onNeedsEnrollment = {}, // Task 6 owns the enrollment sheet.
+                    onOpenStarred = { star ->
+                        val url = try { validTopicUrl(URL(star.url)) } catch (_: Exception) { null }
+                        if (url != null) {
+                            model.markOpened(star)
+                            openExternalTopic(url, ::startActivity)
+                        }
+                    },
+                    onRemoveStar = model::removeStar,
                     onSettings = {},
                 )
+                openTopic?.let { topic ->
+                    TopicWebView(
+                        topic = topic,
+                        starred = model.isStarred(topic),
+                        onToggleStar = { model.toggleStar(topic) },
+                        onDismiss = { openTopic = null },
+                    )
+                }
             }
         }
     }

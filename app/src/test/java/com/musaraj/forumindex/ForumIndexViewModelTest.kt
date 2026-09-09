@@ -391,6 +391,24 @@ class ForumIndexViewModelTest {
         assertEquals(listOf(2), vm.stars.value.map { it.forumId })
     }
 
+    @Test fun removingAndOpeningAStarPersistAndReportWhileEnrolled() = runTest(dispatcher.scheduler) {
+        val saved = star(4, forumId = 7)
+        val prefs = MemoryPreferences(stars = listOf(saved))
+        val api = FakeApi()
+        val vm = viewModel(api, prefs, MemoryTokenStore(enrollment()))
+        advanceUntilIdle()
+
+        vm.markOpened(saved)
+        vm.removeStar(saved)
+        advanceUntilIdle()
+        assertTrue(prefs.stars.isEmpty())
+        assertTrue(prefs.isOpened(7, 4))
+        assertEquals(
+            listOf("action:4:read:true", "action:4:starred:false"),
+            api.calls,
+        )
+    }
+
     @Test fun topicWithoutHttpsUrlCannotBecomeAStar() = runTest(dispatcher.scheduler) {
         val vm = viewModel(FakeApi())
         advanceUntilIdle()

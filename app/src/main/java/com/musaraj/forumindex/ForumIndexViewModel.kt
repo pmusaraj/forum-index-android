@@ -418,16 +418,34 @@ class ForumIndexViewModel(
     fun isOpened(topic: Topic) = isOpened(topic.forum.id, topic.id)
     fun isOpened(forumId: Int, topicId: Int) = preferences.isOpened(forumId, topicId)
 
+    fun isStarred(topic: Topic) = mutableStars.value.any { it.matches(topic) }
+
     fun toggleStar(topic: Topic) {
-        if (topic.url == null) return
+        val url = validTopicUrl(topic.url) ?: return
         val current = mutableStars.value
         val active = current.none { it.matches(topic) }
         val updated = if (active) {
-            current + StarredTopic(topic.title, topic.url.toString(), topic.forum.name, topic.id, topic.forum.id)
+            current + StarredTopic(topic.title, url.toString(), topic.forum.name, topic.id, topic.forum.id)
         } else current.filterNot { it.matches(topic) }
+        saveStars(updated)
+        if (mutableUiState.value.contribution.enrollment != null) report(topic.id, "starred", active)
+    }
+
+    fun removeStar(star: StarredTopic) {
+        val updated = mutableStars.value.filterNot { it.sameIdentity(star) }
+        if (updated.size == mutableStars.value.size) return
+        saveStars(updated)
+        if (mutableUiState.value.contribution.enrollment != null) report(star.topicId, "starred", false)
+    }
+
+    fun markOpened(star: StarredTopic) {
+        star.forumId?.let { preferences.markOpened(it, star.topicId) }
+        if (mutableUiState.value.contribution.enrollment != null) report(star.topicId, "read", true)
+    }
+
+    private fun saveStars(updated: List<StarredTopic>) {
         preferences.stars = updated
         mutableStars.value = updated
-        if (mutableUiState.value.contribution.enrollment != null) report(topic.id, "starred", active)
     }
 
     fun optOut() {
@@ -502,6 +520,9 @@ class ForumIndexViewModel(
     private fun contributionMatches(generation: Int, token: String) = generation == contributionGeneration && currentToken() == token
     private fun StarredTopic.matches(topic: Topic) = if (forumId != null) forumId == topic.forum.id && topicId == topic.id
         else url.isNotEmpty() && url == topic.url?.toString()
+    private fun StarredTopic.sameIdentity(other: StarredTopic) = if (forumId != null && other.forumId != null) {
+        forumId == other.forumId && topicId == other.topicId
+    } else url.isNotEmpty() && url == other.url
 
     private companion object {
         const val MIN_TOPIC_COUNT = 5

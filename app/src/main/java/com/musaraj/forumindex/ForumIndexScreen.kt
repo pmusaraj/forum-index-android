@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -84,7 +86,9 @@ private val ReaderAccent = Color(0xFF008C95)
 @Composable
 internal fun ForumIndexReader(
     uiState: UiState,
+    stars: List<StarredTopic> = emptyList(),
     isOpened: (Topic) -> Boolean = { false },
+    isStarred: (Topic) -> Boolean = { false },
     onSelect: (Destination) -> Unit = {},
     onUpdateVisibleOrder: (List<String>) -> Unit = {},
     onRefresh: (Destination) -> Unit = {},
@@ -92,6 +96,11 @@ internal fun ForumIndexReader(
     onLoadNextPage: (Destination) -> Unit = {},
     onOpenTopic: (Topic) -> Unit = {},
     onStars: () -> Unit = {},
+    onToggleStar: (Topic) -> Unit = {},
+    onReport: (Topic, String) -> Unit = { _, _ -> },
+    onNeedsEnrollment: () -> Unit = {},
+    onOpenStarred: (StarredTopic) -> Unit = {},
+    onRemoveStar: (StarredTopic) -> Unit = {},
     onSettings: () -> Unit = {},
 ) {
     val visible = uiState.visibleDestinations
@@ -103,6 +112,8 @@ internal fun ForumIndexReader(
     }
 
     var subjectsOpen by rememberSaveable { mutableStateOf(false) }
+    var starsOpen by rememberSaveable { mutableStateOf(false) }
+    var explicitReportTopicId by rememberSaveable { mutableStateOf<Int?>(null) }
     val selectedIndex = visible.indexOfFirst { it.id == uiState.selectedDestination?.id }.coerceAtLeast(0)
     val pager = rememberPagerState(initialPage = selectedIndex) { visible.size }
     val scope = rememberCoroutineScope()
@@ -122,7 +133,7 @@ internal fun ForumIndexReader(
     }
 
     Column(Modifier.fillMaxSize().background(ReaderBackground)) {
-        ReaderHeader(onStars, onSettings)
+        ReaderHeader(onStars = { starsOpen = true; onStars() }, onSettings = onSettings)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             LazyRow(
                 modifier = Modifier.weight(1f).height(48.dp).testTag("subject-tabs"),
@@ -174,10 +185,18 @@ internal fun ForumIndexReader(
                     feed = uiState.feeds[destination.id] ?: FeedState.Initial,
                     listState = listState,
                     isOpened = isOpened,
+                    isStarred = isStarred,
                     onRefresh = onRefresh,
                     onRetry = onRetry,
                     onLoadNextPage = onLoadNextPage,
                     onOpenTopic = onOpenTopic,
+                    onToggleStar = onToggleStar,
+                    onReport = { topic, kind ->
+                        if (uiState.contribution.enrollment == null) onNeedsEnrollment() else {
+                            explicitReportTopicId = topic.id
+                            onReport(topic, kind)
+                        }
+                    },
                 )
             }
         }
@@ -189,6 +208,22 @@ internal fun ForumIndexReader(
             visible = visible,
             onDismiss = { subjectsOpen = false },
             onUpdate = onUpdateVisibleOrder,
+        )
+    }
+    if (starsOpen) StarredSheet(stars, { starsOpen = false }, onOpenStarred, onRemoveStar)
+
+    val explicitReportState = explicitReportTopicId?.let(uiState.contribution.reports::get)
+    LaunchedEffect(explicitReportState) {
+        if (explicitReportState is ReportState.Succeeded || explicitReportState is ReportState.NeedsEnrollment) {
+            explicitReportTopicId = null
+        }
+    }
+    if (explicitReportState is ReportState.Failed) {
+        AlertDialog(
+            onDismissRequest = { explicitReportTopicId = null },
+            confirmButton = { Button(onClick = { explicitReportTopicId = null }) { Text("OK") } },
+            title = { Text("Report failed") },
+            text = { Text(explicitReportState.message) },
         )
     }
 }
@@ -220,10 +255,13 @@ private fun FeedPage(
     feed: FeedState,
     listState: LazyListState,
     isOpened: (Topic) -> Boolean,
+    isStarred: (Topic) -> Boolean,
     onRefresh: (Destination) -> Unit,
     onRetry: (Destination) -> Unit,
     onLoadNextPage: (Destination) -> Unit,
     onOpenTopic: (Topic) -> Unit,
+    onToggleStar: (Topic) -> Unit,
+    onReport: (Topic, String) -> Unit,
 ) {
     PullToRefreshBox(
         isRefreshing = feed is FeedState.Refreshing,
@@ -241,11 +279,11 @@ private fun FeedPage(
                         Text("No topics yet")
                     }
                 }
-                is FeedState.Loaded -> topicRows(feed.rows, isOpened, onOpenTopic)
+                is FeedState.Loaded -> topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport)
                 is FeedState.Refreshing -> {
                     if (feed.rows.isEmpty()) skeletonRows() else {
                         item { StatusBanner("Refreshing…") }
-                        topicRows(feed.rows, isOpened, onOpenTopic)
+                        topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport)
                     }
                 }
                 is FeedState.Failed -> {
@@ -259,7 +297,7 @@ private fun FeedPage(
                         }
                     } else {
                         item { StatusBanner("${feed.message} Showing saved topics.") }
-                        topicRows(feed.rows, isOpened, onOpenTopic)
+                        topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport)
                     }
                 }
             }
@@ -287,18 +325,34 @@ private fun androidx.compose.foundation.lazy.LazyListScope.skeletonRows() {
 private fun androidx.compose.foundation.lazy.LazyListScope.topicRows(
     rows: List<Topic>,
     isOpened: (Topic) -> Boolean,
+    isStarred: (Topic) -> Boolean,
     onOpenTopic: (Topic) -> Unit,
+    onToggleStar: (Topic) -> Unit,
+    onReport: (Topic, String) -> Unit,
 ) {
     itemsIndexed(rows, key = { _, topic -> "${topic.forum.id}:${topic.id}" }) { index, topic ->
-        TopicRow(topic, index == 0, isOpened(topic), onOpenTopic)
+        TopicRow(topic, index == 0, isOpened(topic), isStarred(topic), onOpenTopic, onToggleStar, onReport)
     }
 }
 
 @Composable
-private fun TopicRow(topic: Topic, first: Boolean, opened: Boolean, onOpenTopic: (Topic) -> Unit) {
+private fun TopicRow(
+    topic: Topic,
+    first: Boolean,
+    opened: Boolean,
+    starred: Boolean,
+    onOpenTopic: (Topic) -> Unit,
+    onToggleStar: (Topic) -> Unit,
+    onReport: (Topic, String) -> Unit,
+) {
+    var actionsOpen by remember { mutableStateOf(false) }
+    val validUrl = validTopicUrl(topic.url) != null
     Column(
         Modifier.fillMaxWidth()
-            .then(if (topic.url != null) Modifier.clickable { onOpenTopic(topic) } else Modifier)
+            .combinedClickable(
+                onClick = { if (validUrl) onOpenTopic(topic) },
+                onLongClick = { actionsOpen = true },
+            )
             .testTag("topic-${topic.forum.id}-${topic.id}")
             .padding(start = 16.dp, end = 16.dp, top = if (first) 36.dp else 10.dp, bottom = 10.dp)
             .alpha(if (opened) .75f else 1f)
@@ -315,6 +369,39 @@ private fun TopicRow(topic: Topic, first: Boolean, opened: Boolean, onOpenTopic:
             )
         }
     }
+    if (actionsOpen) TopicActions(
+        topic = topic,
+        starred = starred,
+        canStar = validUrl,
+        onDismiss = { actionsOpen = false },
+        onToggleStar = { actionsOpen = false; onToggleStar(topic) },
+        onReport = { kind -> actionsOpen = false; onReport(topic, kind) },
+    )
+}
+
+@Composable
+private fun TopicActions(
+    topic: Topic,
+    starred: Boolean,
+    canStar: Boolean,
+    onDismiss: () -> Unit,
+    onToggleStar: () -> Unit,
+    onReport: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        title = { Text(topic.title) },
+        text = {
+            Column {
+                if (canStar) Button(onClick = onToggleStar) { Text(if (starred) "Unstar" else "Star") }
+                Text("Report", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
+                Button(onClick = { onReport("low_quality") }) { Text("Low quality") }
+                Button(onClick = { onReport("inappropriate") }) { Text("Inappropriate") }
+                Button(onClick = { onReport("wrong_subject") }) { Text("Wrong subject") }
+            }
+        },
+    )
 }
 
 @Composable
@@ -363,6 +450,41 @@ private fun loadIcon(url: URL): Bitmap? {
         null
     } finally {
         connection.disconnect()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StarredSheet(
+    stars: List<StarredTopic>,
+    onDismiss: () -> Unit,
+    onOpen: (StarredTopic) -> Unit,
+    onRemove: (StarredTopic) -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ReaderBackground) {
+        Column(Modifier.fillMaxHeight(.82f).fillMaxWidth().padding(horizontal = 16.dp)) {
+            Text("Starred", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+            if (stars.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No starred topics") }
+            } else LazyColumn {
+                items(stars, key = { "${it.forumId}:${it.topicId}:${it.url}" }) { star ->
+                    Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(
+                            Modifier.weight(1f).fillMaxHeight().clickable { onOpen(star) }
+                                .testTag("starred-${star.forumId}-${star.topicId}").padding(vertical = 8.dp),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(star.title, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(star.forumName, color = Color.Black.copy(alpha = .58f), fontSize = 13.sp)
+                        }
+                        IconButton(
+                            onClick = { onRemove(star) },
+                            modifier = Modifier.size(48.dp).semantics { contentDescription = "Remove ${star.title}" },
+                        ) { Text("×", fontSize = 24.sp) }
+                    }
+                }
+            }
+        }
     }
 }
 
