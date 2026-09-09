@@ -176,6 +176,11 @@ class ForumIndexViewModel(
 
     fun refreshFeed() {
         val destination = mutableUiState.value.selectedDestination ?: return
+        refreshFeed(destination)
+    }
+
+    fun refreshFeed(destination: Destination) {
+        if (mutableUiState.value.selectedDestination?.id != destination.id) return
         val current = mutableUiState.value.feeds[destination.id] ?: FeedState.Initial
         cancelFeed()
         prefetchJob?.cancel()
@@ -184,6 +189,7 @@ class ForumIndexViewModel(
     }
 
     fun retry() = refreshFeed()
+    fun retry(destination: Destination) = refreshFeed(destination)
 
     private fun loadFirstPage(destination: Destination, staleRows: List<Topic>, refreshing: Boolean = false) {
         val generation = ++feedGeneration
@@ -215,8 +221,12 @@ class ForumIndexViewModel(
     }
 
     fun loadNextPage() {
-        if (paginationJob?.isActive == true) return
         val destination = mutableUiState.value.selectedDestination ?: return
+        loadNextPage(destination)
+    }
+
+    fun loadNextPage(destination: Destination) {
+        if (mutableUiState.value.selectedDestination?.id != destination.id || paginationJob?.isActive == true) return
         val current = mutableUiState.value.feeds[destination.id] as? FeedState.Loaded ?: return
         if (!current.hasMore || current.page >= MAX_PAGE) return
         val generation = feedGeneration

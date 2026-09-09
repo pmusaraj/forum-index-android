@@ -151,6 +151,27 @@ class ForumIndexViewModelTest {
         assertFalse(state.rows.any { it.id > 60 })
     }
 
+    @Test fun inactiveDestinationCannotRefreshOrPaginateTheSelectedFeed() = runTest(dispatcher.scheduler) {
+        val first = (1..30).map { topic(it) }
+        val api = FakeApi(
+            subjects = listOf(subject("ai")),
+            mainFeeds = ArrayDeque(listOf(feed(*first.toTypedArray()), feed(topic(99)))),
+        )
+        val vm = viewModel(api)
+        vm.launch(); advanceUntilIdle()
+        val ai = vm.uiState.value.allDestinations.first { it.id == "parent:ai" }
+        val before = api.calls.toList()
+
+        vm.refreshFeed(ai)
+        vm.loadNextPage(ai)
+        advanceUntilIdle()
+        assertEquals(before, api.calls)
+
+        vm.loadNextPage(Destination.Main)
+        advanceUntilIdle()
+        assertEquals(before + "main:2", api.calls)
+    }
+
     @Test fun duplicatePaginationRequestSharesTheSingleInFlightPage() = runTest(dispatcher.scheduler) {
         val runner = ControlledRunner()
         val api = FakeApi(mainFeeds = ArrayDeque(listOf(

@@ -1,0 +1,466 @@
+package com.musaraj.forumindex
+
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+
+private val ReaderBackground = Color(0xFFFAF6EE)
+private val ReaderAccent = Color(0xFF008C95)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ForumIndexReader(
+    uiState: UiState,
+    isOpened: (Topic) -> Boolean = { false },
+    onSelect: (Destination) -> Unit = {},
+    onUpdateVisibleOrder: (List<String>) -> Unit = {},
+    onRefresh: (Destination) -> Unit = {},
+    onRetry: (Destination) -> Unit = {},
+    onLoadNextPage: (Destination) -> Unit = {},
+    onOpenTopic: (Topic) -> Unit = {},
+    onStars: () -> Unit = {},
+    onSettings: () -> Unit = {},
+) {
+    val visible = uiState.visibleDestinations
+    if (visible.isEmpty()) {
+        Box(Modifier.fillMaxSize().background(ReaderBackground), contentAlignment = Alignment.Center) {
+            Text(if (uiState.taxonomy is TaxonomyState.Error) uiState.taxonomy.message else "Loading…")
+        }
+        return
+    }
+
+    var subjectsOpen by rememberSaveable { mutableStateOf(false) }
+    val selectedIndex = visible.indexOfFirst { it.id == uiState.selectedDestination?.id }.coerceAtLeast(0)
+    val pager = rememberPagerState(initialPage = selectedIndex) { visible.size }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(uiState.selectedDestination?.id, visible.map { it.id }) {
+        val target = visible.indexOfFirst { it.id == uiState.selectedDestination?.id }
+        if (target >= 0 && target != pager.currentPage) pager.scrollToPage(target)
+    }
+    LaunchedEffect(pager, visible.map { it.id }, uiState.selectedDestination?.id) {
+        snapshotFlow { pager.settledPage }
+            .filter { it in visible.indices }
+            .distinctUntilChanged()
+            .collect { page ->
+                val destination = visible[page]
+                if (uiState.selectedDestination?.id != destination.id) onSelect(destination)
+            }
+    }
+
+    Column(Modifier.fillMaxSize().background(ReaderBackground)) {
+        ReaderHeader(onStars, onSettings)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            LazyRow(
+                modifier = Modifier.weight(1f).height(48.dp).testTag("subject-tabs"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                items(visible, key = { it.id }) { destination ->
+                    val selected = destination.id == uiState.selectedDestination?.id
+                    Box(
+                        Modifier
+                            .height(48.dp)
+                            .selectable(
+                                selected = selected,
+                                role = Role.Tab,
+                                onClick = {
+                                    scope.launch { pager.animateScrollToPage(visible.indexOf(destination)) }
+                                },
+                            )
+                            .padding(horizontal = 14.dp)
+                            .testTag("tab-${destination.tabTag()}")
+                            .semantics { stateDescription = if (selected) "Selected" else "Not selected" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            destination.label(),
+                            color = if (selected) ReaderAccent else Color.Black,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            modifier = if (selected) Modifier.padding(bottom = 3.dp) else Modifier,
+                        )
+                        if (selected) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp).background(ReaderAccent))
+                    }
+                }
+            }
+            IconButton(
+                onClick = { subjectsOpen = true },
+                modifier = Modifier.size(48.dp).semantics { contentDescription = "Choose subjects" },
+            ) { Text("•••", fontWeight = FontWeight.Bold) }
+        }
+        val holder = rememberSaveableStateHolder()
+        HorizontalPager(
+            state = pager,
+            key = { visible[it].id },
+            modifier = Modifier.fillMaxSize().testTag("reader-pager"),
+        ) { page ->
+            val destination = visible[page]
+            holder.SaveableStateProvider(destination.id) {
+                val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+                FeedPage(
+                    destination = destination,
+                    feed = uiState.feeds[destination.id] ?: FeedState.Initial,
+                    listState = listState,
+                    isOpened = isOpened,
+                    onRefresh = onRefresh,
+                    onRetry = onRetry,
+                    onLoadNextPage = onLoadNextPage,
+                    onOpenTopic = onOpenTopic,
+                )
+            }
+        }
+    }
+
+    if (subjectsOpen) {
+        SubjectSheet(
+            all = uiState.allDestinations,
+            visible = visible,
+            onDismiss = { subjectsOpen = false },
+            onUpdate = onUpdateVisibleOrder,
+        )
+    }
+}
+
+@Composable
+private fun ReaderHeader(onStars: () -> Unit, onSettings: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp).testTag("reader-header"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(Modifier.weight(1f).semantics { heading() }, verticalAlignment = Alignment.Bottom) {
+            Text("forum", color = Color.Black, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text("i", color = ReaderAccent, fontSize = 21.sp, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold)
+            Text("ndex", color = ReaderAccent, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        }
+        IconButton(onClick = onStars, modifier = Modifier.size(48.dp)) {
+            Text("☆", fontSize = 28.sp, modifier = Modifier.semantics { contentDescription = "Starred topics" })
+        }
+        IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Default.Settings, contentDescription = "Settings")
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FeedPage(
+    destination: Destination,
+    feed: FeedState,
+    listState: LazyListState,
+    isOpened: (Topic) -> Boolean,
+    onRefresh: (Destination) -> Unit,
+    onRetry: (Destination) -> Unit,
+    onLoadNextPage: (Destination) -> Unit,
+    onOpenTopic: (Topic) -> Unit,
+) {
+    PullToRefreshBox(
+        isRefreshing = feed is FeedState.Refreshing,
+        onRefresh = { onRefresh(destination) },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().testTag("feed-${destination.id}"),
+        ) {
+            when (feed) {
+                FeedState.Initial -> skeletonRows()
+                FeedState.Empty -> item {
+                    Box(Modifier.fillParentMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text("No topics yet")
+                    }
+                }
+                is FeedState.Loaded -> topicRows(feed.rows, isOpened, onOpenTopic)
+                is FeedState.Refreshing -> {
+                    if (feed.rows.isEmpty()) skeletonRows() else {
+                        item { StatusBanner("Refreshing…") }
+                        topicRows(feed.rows, isOpened, onOpenTopic)
+                    }
+                }
+                is FeedState.Failed -> {
+                    if (feed.rows.isEmpty()) item {
+                        Box(Modifier.fillParentMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(feed.message)
+                                Spacer(Modifier.height(12.dp))
+                                Button(onClick = { onRetry(destination) }) { Text("Retry") }
+                            }
+                        }
+                    } else {
+                        item { StatusBanner("${feed.message} Showing saved topics.") }
+                        topicRows(feed.rows, isOpened, onOpenTopic)
+                    }
+                }
+            }
+            if (feed is FeedState.Loaded && feed.hasMore) item(key = "end-${feed.page}-${feed.rows.size}") {
+                LaunchedEffect(destination.id, feed.page, feed.rows.size) { onLoadNextPage(destination) }
+                Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) { Text("Loading more…") }
+            }
+        }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.skeletonRows() {
+    items(20) { index ->
+        Column(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = if (index == 0) 36.dp else 10.dp)
+                .testTag("skeleton-row-$index"),
+        ) {
+            Box(Modifier.fillMaxWidth(.82f).height(18.dp).background(Color.Black.copy(alpha = .08f)))
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.width(150.dp).height(14.dp).background(Color.Black.copy(alpha = .06f)))
+        }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.topicRows(
+    rows: List<Topic>,
+    isOpened: (Topic) -> Boolean,
+    onOpenTopic: (Topic) -> Unit,
+) {
+    itemsIndexed(rows, key = { _, topic -> "${topic.forum.id}:${topic.id}" }) { index, topic ->
+        TopicRow(topic, index == 0, isOpened(topic), onOpenTopic)
+    }
+}
+
+@Composable
+private fun TopicRow(topic: Topic, first: Boolean, opened: Boolean, onOpenTopic: (Topic) -> Unit) {
+    Column(
+        Modifier.fillMaxWidth()
+            .then(if (topic.url != null) Modifier.clickable { onOpenTopic(topic) } else Modifier)
+            .testTag("topic-${topic.forum.id}-${topic.id}")
+            .padding(start = 16.dp, end = 16.dp, top = if (first) 36.dp else 10.dp, bottom = 10.dp)
+            .alpha(if (opened) .75f else 1f)
+            .semantics { contentDescription = "${topic.title}, ${topic.forum.name}, ${topic.replyCount} replies" },
+    ) {
+        Text(topic.title, color = Color.Black, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, lineHeight = 22.sp)
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ForumIcon(topic.forum)
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "${topic.forum.name} · ${topic.replyCount} ${if (topic.replyCount == 1) "reply" else "replies"}",
+                color = Color.Black.copy(alpha = .58f), fontSize = 13.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ForumIcon(forum: ForumSummary) {
+    val bitmap by produceState<Bitmap?>(null, forum.iconUrl) {
+        value = withContext(Dispatchers.IO) { forum.iconUrl?.let(::loadIcon) }
+    }
+    if (bitmap != null) {
+        Image(bitmap!!.asImageBitmap(), contentDescription = null, Modifier.size(16.dp).clip(CircleShape))
+    } else {
+        Box(
+            Modifier.size(16.dp).clip(CircleShape).background(ReaderAccent),
+            contentAlignment = Alignment.Center,
+        ) { Text(forum.name.firstOrNull()?.uppercase() ?: "?", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold) }
+    }
+}
+
+private fun loadIcon(url: URL): Bitmap? {
+    if (!url.protocol.equals("https", true) || url.path.endsWith(".svg", true)) return null
+    val connection = try { url.openConnection() as HttpURLConnection } catch (_: Exception) { return null }
+    return try {
+        connection.connectTimeout = 3_000
+        connection.readTimeout = 5_000
+        connection.instanceFollowRedirects = false
+        connection.setRequestProperty("Accept", "image/png,image/jpeg,image/webp")
+        if (connection.responseCode !in 200..299 || connection.contentType?.contains("svg", true) == true ||
+            connection.contentLengthLong > MAX_ICON_BYTES) return null
+        val output = ByteArrayOutputStream()
+        connection.inputStream.use { input ->
+            val buffer = ByteArray(8192)
+            var total = 0
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                total += count
+                if (total > MAX_ICON_BYTES) return null
+                output.write(buffer, 0, count)
+            }
+        }
+        val bytes = output.toByteArray()
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth !in 1..MAX_ICON_DIMENSION || bounds.outHeight !in 1..MAX_ICON_DIMENSION) null
+        else BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (_: Exception) {
+        null
+    } finally {
+        connection.disconnect()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SubjectSheet(
+    all: List<Destination>,
+    visible: List<Destination>,
+    onDismiss: () -> Unit,
+    onUpdate: (List<String>) -> Unit,
+) {
+    val visibleIds = visible.map(Destination::id)
+    val hidden = all.filter { it.id !in visibleIds }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ReaderBackground) {
+        LazyColumn(Modifier.fillMaxHeight(.82f).fillMaxWidth().padding(horizontal = 16.dp)) {
+            item { Text("Subjects", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
+            itemsIndexed(visible, key = { _, it -> "visible-${it.id}" }) { index, destination ->
+                SubjectRow(
+                    destination = destination,
+                    checked = true,
+                    canMoveUp = index > 0,
+                    canMoveDown = index < visible.lastIndex,
+                    onToggle = {
+                        if (visible.size > 1) onUpdate(visibleIds - destination.id)
+                    },
+                    onMoveUp = {
+                        val reordered = visibleIds.toMutableList()
+                        reordered[index] = reordered[index - 1].also { reordered[index - 1] = reordered[index] }
+                        onUpdate(reordered)
+                    },
+                    onMoveDown = {
+                        val reordered = visibleIds.toMutableList()
+                        reordered[index] = reordered[index + 1].also { reordered[index + 1] = reordered[index] }
+                        onUpdate(reordered)
+                    },
+                )
+            }
+            if (hidden.isNotEmpty()) {
+                item { HorizontalDivider(Modifier.padding(vertical = 12.dp)); Text("More subjects", fontWeight = FontWeight.SemiBold) }
+                items(hidden, key = { "hidden-${it.id}" }) { destination ->
+                    SubjectRow(destination, checked = false, onToggle = { onUpdate(visibleIds + destination.id) })
+                }
+            }
+            item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun SubjectRow(
+    destination: Destination,
+    checked: Boolean,
+    canMoveUp: Boolean = false,
+    canMoveDown: Boolean = false,
+    onToggle: () -> Unit,
+    onMoveUp: () -> Unit = {},
+    onMoveDown: () -> Unit = {},
+) {
+    Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("☰", Modifier.width(32.dp).semantics { contentDescription = "Reorder ${destination.label()}" }, color = Color.Black.copy(alpha = .45f))
+        Text(destination.label(), Modifier.weight(1f), fontSize = 16.sp)
+        if (checked) {
+            IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move ${destination.label()} up")
+            }
+            IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move ${destination.label()} down")
+            }
+        }
+        Checkbox(
+            checked = checked,
+            onCheckedChange = { onToggle() },
+            modifier = Modifier.size(48.dp).semantics {
+                contentDescription = "Toggle ${destination.label()}"
+                stateDescription = if (checked) "Visible" else "Hidden"
+            },
+        )
+    }
+}
+
+@Composable
+private fun StatusBanner(message: String) {
+    Text(
+        message,
+        Modifier.fillMaxWidth().background(ReaderAccent.copy(alpha = .12f)).padding(horizontal = 16.dp, vertical = 10.dp),
+        color = Color.Black,
+    )
+}
+
+private fun Destination.label() = when (this) {
+    Destination.Main -> "Main"
+    is Destination.Subject -> subject.name
+}
+
+private fun Destination.tabTag() = when (this) {
+    Destination.Main -> "main-feed"
+    is Destination.Subject -> subject.slug
+}
+
+private const val MAX_ICON_BYTES = 256 * 1024L
+private const val MAX_ICON_DIMENSION = 1024
