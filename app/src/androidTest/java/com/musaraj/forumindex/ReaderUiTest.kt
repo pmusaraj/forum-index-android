@@ -107,6 +107,19 @@ class ReaderUiTest {
         compose.runOnIdle { assertEquals(1, retries) }
     }
 
+    @Test fun initialTaxonomyFailureCanRetryWithoutRestarting() {
+        var retries = 0
+        compose.setContent {
+            ForumIndexReader(
+                UiState(taxonomy = TaxonomyState.Error("Offline")),
+                onRetryTaxonomy = { retries++ },
+            )
+        }
+        compose.onNodeWithText("Offline").assertIsDisplayed()
+        compose.onNodeWithText("Retry").performClick()
+        compose.runOnIdle { assertEquals(1, retries) }
+    }
+
     private fun loadedState(rows: Int = 4, subjectCount: Int = 1): UiState {
         val subjects = listOf("ai", "sport", "science", "culture", "games", "tech", "design", "subject-8")
             .take(subjectCount).mapIndexed { index, slug -> Subject(index + 1, label(slug), slug, "", index, false, 20) }

@@ -6,7 +6,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
-import android.os.Build
 import android.view.ViewGroup
 import android.webkit.SafeBrowsingResponse
 import android.webkit.SslErrorHandler
@@ -163,7 +162,7 @@ private fun secureWebView(
     settings.allowFileAccess = false
     settings.allowContentAccess = false
     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) settings.safeBrowsingEnabled = true
+    settings.safeBrowsingEnabled = true
     webViewClient = object : WebViewClient() {
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) = onLoading(true)
         override fun onPageFinished(view: WebView?, url: String?) = onLoading(false)

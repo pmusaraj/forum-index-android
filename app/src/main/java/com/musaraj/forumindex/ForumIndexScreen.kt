@@ -97,6 +97,7 @@ internal fun ForumIndexReader(
     isOpened: (Topic) -> Boolean = { false },
     isStarred: (Topic) -> Boolean = { false },
     onSelect: (Destination) -> Unit = {},
+    onRetryTaxonomy: () -> Unit = {},
     onUpdateVisibleOrder: (List<String>) -> Unit = {},
     onRefresh: (Destination) -> Unit = {},
     onRetry: (Destination) -> Unit = {},
@@ -118,7 +119,15 @@ internal fun ForumIndexReader(
     val visible = uiState.visibleDestinations
     if (visible.isEmpty()) {
         Box(Modifier.fillMaxSize().background(ReaderBackground), contentAlignment = Alignment.Center) {
-            Text(if (uiState.taxonomy is TaxonomyState.Error) uiState.taxonomy.message else "Loading…")
+            if (uiState.taxonomy is TaxonomyState.Error) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(uiState.taxonomy.message)
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = onRetryTaxonomy) { Text("Retry") }
+                }
+            } else {
+                CircularProgressIndicator()
+            }
         }
         return
     }

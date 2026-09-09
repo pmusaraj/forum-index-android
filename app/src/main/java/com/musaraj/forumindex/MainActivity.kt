@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
                     isOpened = model::isOpened,
                     isStarred = model::isStarred,
                     onSelect = model::select,
+                    onRetryTaxonomy = model::refreshTaxonomy,
                     onUpdateVisibleOrder = model::updateVisibleOrder,
                     onRefresh = { model.refreshFeed(it) },
                     onRetry = { model.retry(it) },
