@@ -1,5 +1,6 @@
 package com.musaraj.forumindex
 
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -9,6 +10,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -35,6 +37,38 @@ class ForumIndexViewModelTest {
         assertNotEquals(vm.uiState.value.allDestinations[0].id, vm.uiState.value.allDestinations.first { it is Destination.Subject && it.subject.slug == "main" }.id)
         assertEquals(listOf("sport", "main", "ai"), (vm.uiState.value.taxonomy as TaxonomyState.Loaded).subjects.map { it.slug })
         assertEquals(listOf("main:1", "subject:ai:1"), api.calls)
+    }
+
+    @Test fun mainPersonalizesOnlyWithEnrollmentAndClearsExpiredAccessBeforeFallback() = runTest(dispatcher.scheduler) {
+        val signedOutApi = FakeApi()
+        val signedOut = viewModel(signedOutApi)
+        signedOut.launch(); advanceUntilIdle()
+        assertEquals(listOf("main:1"), signedOutApi.calls)
+
+        val tokens = MemoryTokenStore(enrollment("reader-token"))
+        val expiredApi = FakeApi(expirePersonalized = true)
+        val expired = viewModel(expiredApi, tokens = tokens)
+        expired.launch(); advanceUntilIdle()
+
+        assertNull(tokens.value)
+        assertNull(expired.uiState.value.contribution.enrollment)
+        assertEquals(listOf("for_you:1:reader-token", "main:1"), expiredApi.calls)
+    }
+
+    @Test fun expiredPersonalizedCleanupSurvivesFeedCancellation() = runTest(dispatcher.scheduler) {
+        val runner = CancellationAwareRunner()
+        val tokens = MemoryTokenStore(enrollment("reader-token"))
+        val vm = viewModel(FakeApi(expirePersonalized = true), tokens = tokens, runner = runner)
+        vm.launch()
+        completeNext(runner) // persisted enrollment
+        completeNext(runner) // taxonomy
+        completeNext(runner) // expired personalized request; cleanup is now independent
+
+        vm.refreshFeed(); runCurrent()
+        completeNext(runner) // token deletion survives refresh cancellation
+
+        assertNull(tokens.value)
+        assertNull(vm.uiState.value.contribution.enrollment)
     }
 
     @Test fun persistedVisibilityIsOrderedValidatedAndNeverEmpty() = runTest(dispatcher.scheduler) {
@@ -435,6 +469,13 @@ class ForumIndexViewModelTest {
         runCurrent()
     }
 
+    private suspend fun TestScope.completeNext(runner: CancellationAwareRunner) {
+        runCurrent()
+        assertTrue("expected a pending cancellable call", runner.pendingCount > 0)
+        runner.completeNext()
+        runCurrent()
+    }
+
     private fun viewModel(
         api: FakeApi,
         prefs: MemoryPreferences = MemoryPreferences(),
@@ -464,6 +505,21 @@ class ForumIndexViewModelTest {
         override fun delete() { deletes++; value = null }
     }
 
+    private class CancellationAwareRunner : BlockingCallRunner {
+        private val pending = ArrayDeque<Pair<() -> Any?, CancellableContinuation<Any?>>>()
+        val pendingCount get() = pending.size
+
+        override suspend fun <T> run(call: () -> T): T = suspendCancellableCoroutine { continuation ->
+            @Suppress("UNCHECKED_CAST")
+            pending += (call as () -> Any?) to (continuation as CancellableContinuation<Any?>)
+        }
+
+        fun completeNext() {
+            val (call, continuation) = pending.removeFirst()
+            if (continuation.isActive) continuation.resumeWith(runCatching(call))
+        }
+    }
+
     private class ControlledRunner : BlockingCallRunner {
         private val pending = ArrayDeque<Pair<() -> Any?, Continuation<Any?>>>()
         val pendingCount get() = pending.size
@@ -490,10 +546,16 @@ class ForumIndexViewModelTest {
         val expireDelete: Boolean = false,
         val actionFailure: Boolean = false,
         val expireAction: Boolean = false,
+        val expirePersonalized: Boolean = false,
     ) : ForumIndexApi {
         val calls = mutableListOf<String>()
         override fun fetchTaxonomy() = NavigationEnvelope("v2", "5d", subjects)
         override fun fetchMainTopics(page: Int): FeedEnvelope { calls += "main:$page"; return mainFeeds.removeFirstOrNull() ?: feed() }
+        override fun fetchPersonalizedTopics(page: Int, token: String?): FeedEnvelope {
+            calls += "for_you:$page:$token"
+            if (expirePersonalized) throw ForumIndexApiException.ExpiredAccess()
+            return mainFeeds.removeFirstOrNull() ?: feed()
+        }
         override fun fetchSubjectTopics(slug: String, page: Int): FeedEnvelope { calls += "subject:$slug:$page"; return feed(topic(slug.hashCode())) }
         override fun createInstallation(displayName: String, deviceName: String): Enrollment { calls += "create:$displayName:$deviceName"; if (createFailure) throw ForumIndexApiException.Transport(); return enrollment() }
         override fun fetchInstallation(token: String): Installation { calls += "fetch:$token"; if (expireFetch) throw ForumIndexApiException.ExpiredAccess(); return enrollment(token).installation }

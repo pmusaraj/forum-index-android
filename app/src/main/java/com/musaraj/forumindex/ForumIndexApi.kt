@@ -58,6 +58,7 @@ sealed interface Destination {
 interface ForumIndexApi {
     fun fetchTaxonomy(): NavigationEnvelope
     fun fetchMainTopics(page: Int): FeedEnvelope
+    fun fetchPersonalizedTopics(page: Int, token: String?): FeedEnvelope = fetchMainTopics(page)
     fun fetchSubjectTopics(slug: String, page: Int): FeedEnvelope
     fun createInstallation(displayName: String, deviceName: String): Enrollment
     fun fetchInstallation(token: String): Installation
@@ -84,6 +85,10 @@ class HttpForumIndexApi(
         require(page > 0) { "page must be positive" }
         return url("/api/v2/topics", "feed=main&limit=30&page=$page&language=en")
     }
+    internal fun personalizedTopicsUrl(page: Int): URL {
+        require(page > 0) { "page must be positive" }
+        return url("/api/v2/topics", "feed=for_you&limit=30&page=$page&language=en")
+    }
     internal fun subjectTopicsUrl(slug: String, page: Int): URL {
         require(page > 0) { "page must be positive" }
         return url("/api/v2/subjects/${encodeSlug(slug)}/topics", "feed=trending&limit=30&page=$page&language=en")
@@ -96,6 +101,11 @@ class HttpForumIndexApi(
 
     override fun fetchMainTopics(page: Int): FeedEnvelope {
         val body = request(mainTopicsUrl(page), "GET")
+        return decode { ForumIndexJson.feed(body) }
+    }
+
+    override fun fetchPersonalizedTopics(page: Int, token: String?): FeedEnvelope {
+        val body = request(personalizedTopicsUrl(page), "GET", token = token?.let(::checkedToken))
         return decode { ForumIndexJson.feed(body) }
     }
 

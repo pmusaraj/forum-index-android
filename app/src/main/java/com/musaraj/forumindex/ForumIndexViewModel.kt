@@ -145,7 +145,15 @@ class ForumIndexViewModel(
             selectedDestination = selected,
             feeds = feeds,
         )
-        if (feeds.getValue(selected.id) !is FeedState.Loaded && feeds.getValue(selected.id) !is FeedState.Empty) select(selected, force = true)
+        loadSelectedFeedIfReady()
+    }
+
+    private fun loadSelectedFeedIfReady() {
+        val state = mutableUiState.value
+        val selected = state.selectedDestination ?: return
+        if (state.contribution.loading) return
+        val feed = state.feeds[selected.id] ?: FeedState.Initial
+        if (feed !is FeedState.Loaded && feed !is FeedState.Empty) select(selected, force = true)
         else prefetchNext()
     }
 
@@ -202,7 +210,7 @@ class ForumIndexViewModel(
         )
         feedJob = viewModelScope.launch {
             try {
-                val response = calls.run { fetch(destination, 1) }.capped()
+                val response = fetch(destination, 1).capped()
                 if (generation != feedGeneration || mutableUiState.value.selectedDestination?.id != destination.id) return@launch
                 setFeed(destination.id, response.toState(1))
                 feedJob = null
@@ -234,7 +242,7 @@ class ForumIndexViewModel(
         paginationJob = viewModelScope.launch {
             try {
                 val nextPage = current.page + 1
-                val response = calls.run { fetch(destination, nextPage) }.capped()
+                val response = fetch(destination, nextPage).capped()
                 if (generation != feedGeneration || mutableUiState.value.selectedDestination?.id != destination.id) return@launch
                 val rows = (current.rows + response.results).distinctBy { it.forum.id to it.id }
                 setFeed(destination.id, FeedState.Loaded(rows, nextPage, nextPage < MAX_PAGE && response.results.size == PAGE_SIZE))
@@ -276,7 +284,7 @@ class ForumIndexViewModel(
         val generation = feedGeneration
         prefetchJob = viewModelScope.launch {
             try {
-                val response = calls.run { fetch(destination, 1) }.capped()
+                val response = fetch(destination, 1).capped()
                 val current = mutableUiState.value
                 val currentIndex = current.visibleDestinations.indexOfFirst { it.id == current.selectedDestination?.id }
                 if (preloadGeneration == prefetchGeneration && generation == feedGeneration &&
@@ -297,11 +305,17 @@ class ForumIndexViewModel(
         viewModelScope.launch {
             try {
                 val enrollment = calls.run(tokenStore::load)
-                if (generation == contributionGeneration) contributionSuccess(enrollment)
+                if (generation == contributionGeneration) {
+                    contributionSuccess(enrollment)
+                    loadSelectedFeedIfReady()
+                }
             } catch (_: CancellationException) {
                 throw CancellationException()
             } catch (_: Exception) {
-                if (generation == contributionGeneration) contributionFailure()
+                if (generation == contributionGeneration) {
+                    contributionFailure()
+                    loadSelectedFeedIfReady()
+                }
             }
         }
     }
@@ -320,6 +334,7 @@ class ForumIndexViewModel(
                 if (generation != contributionGeneration || currentToken() != null) return@launch
                 preferences.deviceNameOverride = device
                 contributionSuccess(enrollment)
+                reloadMainFeed()
             } catch (_: CancellationException) {
                 throw CancellationException()
             } catch (_: Exception) {
@@ -458,7 +473,10 @@ class ForumIndexViewModel(
                 if (enrollment != null) calls.run { api.deleteInstallation(enrollment.token) }
                 if (generation != contributionGeneration || currentToken() != enrollment?.token) return@launch
                 calls.run(tokenStore::delete)
-                if (generation == contributionGeneration && currentToken() == enrollment?.token) contributionSuccess(null)
+                if (generation == contributionGeneration && currentToken() == enrollment?.token) {
+                    contributionSuccess(null)
+                    reloadMainFeed()
+                }
             } catch (_: ForumIndexApiException.ExpiredAccess) {
                 expireEnrollment(generation, enrollment?.token)
             } catch (_: CancellationException) {
@@ -487,7 +505,21 @@ class ForumIndexViewModel(
         calls.run(tokenStore::delete)
         if (clearingGeneration != contributionGeneration || currentToken() != expectedToken) return false
         contributionSuccess(null)
+        reloadMainFeed()
         return true
+    }
+
+    private fun reloadMainFeed() {
+        prefetchJob?.cancel()
+        prefetchJob = null
+        prefetchGeneration++
+        if (mutableUiState.value.selectedDestination == Destination.Main) {
+            cancelFeed()
+            setFeed(Destination.Main.id, FeedState.Initial)
+            loadFirstPage(Destination.Main, emptyList())
+        } else {
+            setFeed(Destination.Main.id, FeedState.Initial)
+        }
     }
 
     private fun setReport(topicId: Int, report: ReportState) {
@@ -495,9 +527,25 @@ class ForumIndexViewModel(
         mutableUiState.value = mutableUiState.value.copy(contribution = contribution.copy(reports = contribution.reports + (topicId to report)))
     }
 
-    private fun fetch(destination: Destination, page: Int) = when (destination) {
-        Destination.Main -> api.fetchMainTopics(page)
-        is Destination.Subject -> api.fetchSubjectTopics(destination.subject.slug, page)
+    private suspend fun fetch(destination: Destination, page: Int) = when (destination) {
+        Destination.Main -> {
+            val expectedGeneration = contributionGeneration
+            val token = currentToken()
+            if (token == null) {
+                calls.run { api.fetchMainTopics(page) }
+            } else {
+                try {
+                    calls.run { api.fetchPersonalizedTopics(page, token) }
+                } catch (_: ForumIndexApiException.ExpiredAccess) {
+                    viewModelScope.launch { expireEnrollment(expectedGeneration, token) }
+                    throw CancellationException()
+                } catch (error: ForumIndexApiException.Http) {
+                    if (error.status != 400) throw error
+                    calls.run { api.fetchMainTopics(page) }
+                }
+            }
+        }
+        is Destination.Subject -> calls.run { api.fetchSubjectTopics(destination.subject.slug, page) }
     }
 
     private fun FeedEnvelope.capped() = copy(results = results.take(PAGE_SIZE))

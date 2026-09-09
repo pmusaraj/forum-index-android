@@ -18,7 +18,7 @@ class ForumIndexApiTest {
     @Test fun buildsExactProductionReadUrls() {
         val api = HttpForumIndexApi(connectionFactory = { FakeConnection(it) })
         assertEquals("https://do3.musaraj.com/api/v2/subjects?window=5d&language=en", api.taxonomyUrl().toString())
-        assertEquals("https://do3.musaraj.com/api/v2/topics?feed=main&limit=30&page=2&language=en", api.mainTopicsUrl(2).toString())
+        assertEquals("https://do3.musaraj.com/api/v2/topics?feed=for_you&limit=30&page=2&language=en", api.personalizedTopicsUrl(2).toString())
         assertEquals("https://do3.musaraj.com/api/v2/subjects/caf%C3%A9%20news/topics?feed=trending&limit=30&page=3&language=en", api.subjectTopicsUrl("café news", 3).toString())
     }
 
@@ -52,6 +52,16 @@ class ForumIndexApiTest {
         assertEquals(Instant.parse("2026-09-08T10:11:12Z"), feed.results[1].publishedAt)
         assertNull(feed.results[1].forum.baseUrl)
         assertEquals("https://cdn.test/i.png", feed.results[1].forum.iconUrl.toString())
+    }
+
+    @Test fun personalizedFeedUsesBearerCredential() {
+        lateinit var call: FakeConnection
+        val api = HttpForumIndexApi(connectionFactory = { FakeConnection(it, "{\"count\":0,\"results\":[]}").also { value -> call = value } })
+
+        api.fetchPersonalizedTopics(1, "reader-token")
+
+        assertEquals("for_you", call.url.query.split("&").associate { it.substringBefore("=") to it.substringAfter("=") }.getValue("feed"))
+        assertEquals("Bearer reader-token", call.headers["Authorization"])
     }
 
     @Test fun contributionRequestsUseExactMethodsPathsBodiesAndHeaders() {
