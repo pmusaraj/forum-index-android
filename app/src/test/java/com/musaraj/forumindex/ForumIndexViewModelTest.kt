@@ -324,7 +324,7 @@ class ForumIndexViewModelTest {
         assertEquals(enrollment(), store.value)
     }
 
-    @Test fun tokenLoadSaveAndDeleteAllUseBlockingRunner() = runTest(dispatcher.scheduler) {
+    @Test fun tokenLoadAndSaveUseBlockingRunnerButDeleteIsImmediate() = runTest(dispatcher.scheduler) {
         val runner = ControlledRunner()
         val store = MemoryTokenStore(enrollment())
         val vm = viewModel(FakeApi(), tokens = store, runner = runner)
@@ -338,9 +338,9 @@ class ForumIndexViewModelTest {
         assertEquals(0, store.saves)
         completeNext(runner) // Keystore save
         assertEquals(1, store.saves)
-        vm.optOut(); runCurrent()
-        completeNext(runner) // Keystore delete
+        vm.optOut()
         assertEquals(1, store.deletes)
+        runCurrent()
         completeNext(runner) // API
     }
 
@@ -364,10 +364,11 @@ class ForumIndexViewModelTest {
         val vm = viewModel(api, tokens = store)
         advanceUntilIdle()
 
-        vm.optOut(); advanceUntilIdle()
+        vm.optOut()
 
         assertNull(store.value)
         assertNull(vm.uiState.value.contribution.enrollment)
+        advanceUntilIdle()
         assertEquals(listOf("delete:token"), api.calls.filter { it.startsWith("delete:") })
     }
 
@@ -606,7 +607,7 @@ class ForumIndexViewModelTest {
         override fun deleteInstallation(token: String) {
             calls += "delete:$token"
             if (expireDelete) throw ForumIndexApiException.ExpiredAccess()
-            if (deleteFailure) throw ForumIndexApiException.Transport()
+            if (deleteFailure) error("unexpected delete failure")
         }
         override fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String) {
             calls += "action:$topicId:$kind:$active"

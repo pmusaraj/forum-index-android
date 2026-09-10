@@ -508,25 +508,24 @@ class ForumIndexViewModel(
         val enrollment = mutableUiState.value.contribution.enrollment
         val generation = ++contributionGeneration
         contributionLoading()
+        try {
+            // ponytail: synchronous delete survives ViewModel cancellation; use a durable worker if measured jank warrants it.
+            tokenStore.delete()
+        } catch (_: Exception) {
+            if (generation == contributionGeneration) contributionFailure()
+            return
+        }
+        if (generation != contributionGeneration || currentToken() != enrollment?.token) return
+        contributionSuccess(null)
+        reloadMainFeed()
+        if (enrollment == null) return
         viewModelScope.launch {
             try {
-                calls.run(tokenStore::delete)
-                if (generation != contributionGeneration || currentToken() != enrollment?.token) return@launch
-                contributionSuccess(null)
-                reloadMainFeed()
-                if (enrollment != null) {
-                    try {
-                        calls.run { api.deleteInstallation(enrollment.token) }
-                    } catch (_: CancellationException) {
-                        throw CancellationException()
-                    } catch (_: ForumIndexApiException) {
-                        // Local opt-out is complete; server revocation is best effort.
-                    }
-                }
+                calls.run { api.deleteInstallation(enrollment.token) }
             } catch (_: CancellationException) {
                 throw CancellationException()
             } catch (_: Exception) {
-                if (generation == contributionGeneration) contributionFailure()
+                // Local opt-out is complete; server revocation is best effort.
             }
         }
     }
