@@ -64,6 +64,28 @@ class ForumIndexApiTest {
         assertEquals("Bearer reader-token", call.headers["Authorization"])
     }
 
+    @Test fun trustedForumSubmissionUsesAuthenticatedEndpoint() {
+        lateinit var call: FakeConnection
+        val api = HttpForumIndexApi(connectionFactory = { FakeConnection(it, "{\"forum_id\":1,\"status\":\"candidate\"}").also { value -> call = value } })
+
+        api.submitForum("https://community.example.com", "reader-token")
+
+        assertEquals("POST", call.requestMethod)
+        assertEquals("/api/v2/forum-submission", call.url.path)
+        assertEquals("Bearer reader-token", call.headers["Authorization"])
+        assertEquals(mapOf("url" to "https://community.example.com"), call.sentJson())
+    }
+
+    @Test fun untrustedForumSubmissionDoesNotExpireBearer() {
+        val api = HttpForumIndexApi(connectionFactory = { FakeConnection(it, "{}", 403) })
+
+        val error = assertThrows(ForumIndexApiException.Http::class.java) {
+            api.submitForum("https://community.example.com", "reader-token")
+        }
+
+        assertEquals(403, error.status)
+    }
+
     @Test fun contributionRequestsUseExactMethodsPathsBodiesAndHeaders() {
         val calls = mutableListOf<FakeConnection>()
         val responses = ArrayDeque(listOf(

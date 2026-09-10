@@ -58,6 +58,8 @@ data class ContributionState(
     val loading: Boolean = true,
     val error: String? = null,
     val reports: Map<Int, ReportState> = emptyMap(),
+    val submittingForum: Boolean = false,
+    val forumSubmissionMessage: String? = null,
 )
 
 data class UiState(
@@ -323,7 +325,7 @@ class ForumIndexViewModel(
     fun enroll(displayName: String, deviceName: String): Boolean {
         val display = validLabel(displayName) ?: return false
         val device = validLabel(deviceName) ?: return false
-        if (mutableUiState.value.contribution.loading) return false
+        if (mutableUiState.value.contribution.loading || mutableUiState.value.contribution.submittingForum) return false
         val generation = ++contributionGeneration
         contributionLoading()
         viewModelScope.launch {
@@ -345,7 +347,7 @@ class ForumIndexViewModel(
     }
 
     fun refreshEnrollment() {
-        if (mutableUiState.value.contribution.loading) return
+        if (mutableUiState.value.contribution.loading || mutableUiState.value.contribution.submittingForum) return
         val enrollment = mutableUiState.value.contribution.enrollment ?: return
         val generation = ++contributionGeneration
         contributionLoading()
@@ -368,7 +370,7 @@ class ForumIndexViewModel(
 
     fun updateDevice(deviceName: String): Boolean {
         val device = validLabel(deviceName) ?: return false
-        if (mutableUiState.value.contribution.loading) return false
+        if (mutableUiState.value.contribution.loading || mutableUiState.value.contribution.submittingForum) return false
         val enrollment = mutableUiState.value.contribution.enrollment ?: return false
         val generation = ++contributionGeneration
         contributionLoading()
@@ -421,6 +423,44 @@ class ForumIndexViewModel(
         return true
     }
 
+    fun submitForum(url: String): Boolean {
+        val enrollment = mutableUiState.value.contribution.enrollment ?: return false
+        if (!enrollment.installation.trusted || mutableUiState.value.contribution.loading ||
+            mutableUiState.value.contribution.submittingForum) return false
+        val value = url.trim()
+        val valid = try { validTopicUrl(java.net.URL(value)) != null } catch (_: Exception) { false }
+        if (!valid || value.toByteArray().size > 1_000) return false
+        val generation = contributionGeneration
+        mutableUiState.value = mutableUiState.value.copy(
+            contribution = mutableUiState.value.contribution.copy(submittingForum = true, forumSubmissionMessage = null),
+        )
+        viewModelScope.launch {
+            try {
+                calls.run { api.submitForum(value, enrollment.token) }
+                if (contributionMatches(generation, enrollment.token)) {
+                    mutableUiState.value = mutableUiState.value.copy(
+                        contribution = mutableUiState.value.contribution.copy(
+                            submittingForum = false, forumSubmissionMessage = "Forum submitted for review.",
+                        ),
+                    )
+                }
+            } catch (_: ForumIndexApiException.ExpiredAccess) {
+                expireEnrollment(generation, enrollment.token)
+            } catch (_: CancellationException) {
+                throw CancellationException()
+            } catch (_: Exception) {
+                if (contributionMatches(generation, enrollment.token)) {
+                    mutableUiState.value = mutableUiState.value.copy(
+                        contribution = mutableUiState.value.contribution.copy(
+                            submittingForum = false, forumSubmissionMessage = "Couldn’t submit this forum. Try again.",
+                        ),
+                    )
+                }
+            }
+        }
+        return true
+    }
+
     fun markOpened(topic: Topic) {
         markOpened(topic.forum.id, topic.id)
     }
@@ -464,7 +504,7 @@ class ForumIndexViewModel(
     }
 
     fun optOut() {
-        if (mutableUiState.value.contribution.loading) return
+        if (mutableUiState.value.contribution.loading || mutableUiState.value.contribution.submittingForum) return
         val enrollment = mutableUiState.value.contribution.enrollment
         val generation = ++contributionGeneration
         contributionLoading()
@@ -488,15 +528,27 @@ class ForumIndexViewModel(
     }
 
     private fun contributionLoading() {
-        mutableUiState.value = mutableUiState.value.copy(contribution = mutableUiState.value.contribution.copy(loading = true, error = null))
+        mutableUiState.value = mutableUiState.value.copy(
+            contribution = mutableUiState.value.contribution.copy(
+                loading = true, error = null, submittingForum = false, forumSubmissionMessage = null,
+            ),
+        )
     }
 
     private fun contributionSuccess(enrollment: Enrollment?) {
-        mutableUiState.value = mutableUiState.value.copy(contribution = mutableUiState.value.contribution.copy(enrollment = enrollment, loading = false, error = null))
+        mutableUiState.value = mutableUiState.value.copy(
+            contribution = mutableUiState.value.contribution.copy(
+                enrollment = enrollment, loading = false, error = null, submittingForum = false,
+            ),
+        )
     }
 
     private fun contributionFailure() {
-        mutableUiState.value = mutableUiState.value.copy(contribution = mutableUiState.value.contribution.copy(loading = false, error = REQUEST_FAILED))
+        mutableUiState.value = mutableUiState.value.copy(
+            contribution = mutableUiState.value.contribution.copy(
+                loading = false, error = REQUEST_FAILED, submittingForum = false,
+            ),
+        )
     }
 
     private suspend fun expireEnrollment(expectedGeneration: Int, expectedToken: String?): Boolean {

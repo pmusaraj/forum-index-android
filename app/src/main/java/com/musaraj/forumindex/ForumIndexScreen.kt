@@ -114,6 +114,7 @@ internal fun ForumIndexReader(
     onEnroll: (String, String) -> Unit = { _, _ -> },
     onRefreshContribution: () -> Unit = {},
     onUpdateDevice: (String) -> Unit = {},
+    onSubmitForum: (String) -> Boolean = { false },
     onOptOut: () -> Unit = {},
 ) {
     val visible = uiState.visibleDestinations
@@ -246,6 +247,7 @@ internal fun ForumIndexReader(
         onEnroll = onEnroll,
         onRefresh = onRefreshContribution,
         onUpdateDevice = onUpdateDevice,
+        onSubmitForum = onSubmitForum,
         onOptOut = onOptOut,
     )
 
@@ -294,15 +296,20 @@ private fun ContributionSheet(
     onEnroll: (String, String) -> Unit,
     onRefresh: () -> Unit,
     onUpdateDevice: (String) -> Unit,
+    onSubmitForum: (String) -> Boolean,
     onOptOut: () -> Unit,
 ) {
     var displayName by rememberSaveable { mutableStateOf("") }
     var deviceName by rememberSaveable { mutableStateOf(defaultDeviceName.cappedLabel()) }
     var confirmOptOut by rememberSaveable { mutableStateOf(false) }
+    var forumURL by rememberSaveable { mutableStateOf("") }
     val installation = state.enrollment?.installation
 
     LaunchedEffect(installation?.deviceName) {
         if (installation != null) deviceName = installation.deviceName.cappedLabel()
+    }
+    LaunchedEffect(state.forumSubmissionMessage) {
+        if (state.forumSubmissionMessage == "Forum submitted for review.") forumURL = ""
     }
 
     ModalBottomSheet(
@@ -321,6 +328,12 @@ private fun ContributionSheet(
                     modifier = Modifier.size(48.dp).semantics { contentDescription = "Close contribution settings" },
                 ) { Text("×", fontSize = 24.sp) }
             }
+
+            Text(
+                "When contributions are enabled, Main is personalized using topics you read and star. Otherwise it follows overall trending activity.",
+                color = Color.Black.copy(alpha = .65f), fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(16.dp))
 
             if (installation == null) {
                 Text("Optionally share simple topic actions to improve the public index.")
@@ -353,7 +366,7 @@ private fun ContributionSheet(
                 Text(if (installation.deviceVerified) "Device verified" else "Device unverified")
                 TextButton(
                     onClick = onRefresh,
-                    enabled = !state.loading,
+                    enabled = !state.loading && !state.submittingForum,
                     modifier = Modifier.height(48.dp).testTag("refresh-contribution-status"),
                 ) { Text("Refresh status") }
                 OutlinedTextField(
@@ -361,15 +374,42 @@ private fun ContributionSheet(
                     onValueChange = { deviceName = it.cappedLabel() },
                     label = { Text("Device name") },
                     singleLine = true,
-                    enabled = !state.loading,
+                    enabled = !state.loading && !state.submittingForum,
                     modifier = Modifier.fillMaxWidth().testTag("contribution-device-name"),
                     supportingText = { Text("Required · 100 characters maximum") },
                 )
                 Button(
                     onClick = { onUpdateDevice(deviceName.trim()) },
-                    enabled = !state.loading && deviceName.validLabel() && deviceName.trim() != installation.deviceName,
+                    enabled = !state.loading && !state.submittingForum && deviceName.validLabel() && deviceName.trim() != installation.deviceName,
                     modifier = Modifier.fillMaxWidth().height(48.dp).testTag("save-device-name"),
                 ) { Text("Save") }
+            }
+
+            if (installation?.trusted == true) {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text("Trusted tools", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = forumURL,
+                    onValueChange = { if (it.toByteArray().size <= 1_000) forumURL = it },
+                    label = { Text("Forum URL") },
+                    singleLine = true,
+                    enabled = !state.loading && !state.submittingForum,
+                    modifier = Modifier.fillMaxWidth().testTag("forum-submission-url"),
+                )
+                Button(
+                    onClick = { onSubmitForum(forumURL.trim()) },
+                    enabled = !state.loading && !state.submittingForum && forumURL.trim().startsWith("https://") &&
+                        forumURL.trim().toByteArray().size <= 1_000,
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("submit-forum"),
+                ) { Text(if (state.submittingForum) "Submitting…" else "Submit forum") }
+                state.forumSubmissionMessage?.let {
+                    Text(
+                        it,
+                        color = if (it == "Forum submitted for review.") Color.Black.copy(alpha = .65f)
+                        else MaterialTheme.colorScheme.error,
+                        fontSize = 13.sp,
+                    )
+                }
             }
 
             if (state.loading) {
@@ -398,7 +438,7 @@ private fun ContributionSheet(
             if (installation != null) {
                 TextButton(
                     onClick = { confirmOptOut = true },
-                    enabled = !state.loading,
+                    enabled = !state.loading && !state.submittingForum,
                     modifier = Modifier.height(48.dp).testTag("opt-out"),
                 ) { Text("Opt out") }
             }

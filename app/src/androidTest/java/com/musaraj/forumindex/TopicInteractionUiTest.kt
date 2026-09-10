@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -240,14 +241,32 @@ class TopicInteractionUiTest {
         compose.onNodeWithTag("starred-10-1").assertIsDisplayed()
     }
 
-    private fun state(topics: List<Topic>, enrolled: Boolean = false) = UiState(
+    @Test fun trustedSettingsExplainPersonalizationAndShowForumSubmission() {
+        var ui by mutableStateOf(state(emptyList(), enrolled = true, trusted = true))
+        compose.setContent { ForumIndexReader(ui, emptyList()) }
+
+        compose.onNodeWithContentDescription("Contribution settings").performClick()
+
+        compose.onNodeWithText("When contributions are enabled, Main is personalized using topics you read and star. Otherwise it follows overall trending activity.").assertIsDisplayed()
+        compose.onNodeWithTag("forum-submission-url").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("submit-forum").assertIsDisplayed()
+        compose.runOnIdle {
+            ui = ui.copy(contribution = ui.contribution.copy(submittingForum = true))
+        }
+        compose.onNodeWithTag("forum-submission-url").assertIsNotEnabled()
+        compose.onNodeWithTag("submit-forum").assertIsNotEnabled()
+        compose.onNodeWithTag("refresh-contribution-status").assertIsNotEnabled()
+        compose.onNodeWithTag("opt-out").assertIsNotEnabled()
+    }
+
+    private fun state(topics: List<Topic>, enrolled: Boolean = false, trusted: Boolean = false) = UiState(
         taxonomy = TaxonomyState.Loaded(emptyList()),
         allDestinations = listOf(Destination.Main),
         visibleDestinations = listOf(Destination.Main),
         selectedDestination = Destination.Main,
         feeds = mapOf(Destination.Main.id to FeedState.Loaded(topics, 1, false)),
         contribution = ContributionState(
-            enrollment = if (enrolled) Enrollment("token", Installation("id", "Name", "Phone", false, false)) else null,
+            enrollment = if (enrolled) Enrollment("token", Installation("id", "Name", "Phone", false, trusted)) else null,
             loading = false,
         ),
     )

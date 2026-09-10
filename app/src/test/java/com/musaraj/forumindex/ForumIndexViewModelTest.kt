@@ -277,6 +277,35 @@ class ForumIndexViewModelTest {
         assertEquals(listOf(8), vm.uiState.value.feeds.getValue("parent:sport").rows.map { it.id })
     }
 
+    @Test fun trustedContributorCanSubmitAForumCandidate() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val vm = viewModel(api, tokens = MemoryTokenStore(enrollment("reader-token")))
+        advanceUntilIdle()
+
+        assertTrue(vm.submitForum(" https://community.example.com "))
+        advanceUntilIdle()
+
+        assertEquals("Forum submitted for review.", vm.uiState.value.contribution.forumSubmissionMessage)
+        assertTrue("submit:https://community.example.com:reader-token" in api.calls)
+    }
+
+    @Test fun forumSubmissionBlocksCompetingContributionMutations() = runTest(dispatcher.scheduler) {
+        val runner = ControlledRunner()
+        val api = FakeApi()
+        val vm = viewModel(api, tokens = MemoryTokenStore(enrollment("reader-token")), runner = runner)
+        completeNext(runner) // persisted enrollment
+
+        assertTrue(vm.submitForum("https://community.example.com")); runCurrent()
+        assertEquals(1, runner.pendingCount)
+        vm.refreshEnrollment()
+        vm.optOut()
+        assertFalse(vm.updateDevice("Other phone"))
+        assertEquals(1, runner.pendingCount)
+
+        completeNext(runner)
+        assertEquals("Forum submitted for review.", vm.uiState.value.contribution.forumSubmissionMessage)
+    }
+
     @Test fun validatesUnicodeLabelsAndPersistsEnrollmentOnlyAfterSuccess() = runTest(dispatcher.scheduler) {
         val failedStore = MemoryTokenStore()
         val failedApi = FakeApi(createFailure = true)
@@ -560,6 +589,7 @@ class ForumIndexViewModelTest {
         override fun createInstallation(displayName: String, deviceName: String): Enrollment { calls += "create:$displayName:$deviceName"; if (createFailure) throw ForumIndexApiException.Transport(); return enrollment() }
         override fun fetchInstallation(token: String): Installation { calls += "fetch:$token"; if (expireFetch) throw ForumIndexApiException.ExpiredAccess(); return enrollment(token).installation }
         override fun updateInstallation(deviceName: String, token: String): Installation { calls += "update:$deviceName"; return enrollment(token).installation.copy(deviceName = deviceName) }
+        override fun submitForum(url: String, token: String) { calls += "submit:$url:$token" }
         override fun deleteInstallation(token: String) { calls += "delete:$token"; if (expireDelete) throw ForumIndexApiException.ExpiredAccess() }
         override fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String) {
             calls += "action:$topicId:$kind:$active"

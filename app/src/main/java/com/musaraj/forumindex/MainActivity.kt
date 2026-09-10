@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
                     onEnroll = { displayName, deviceName -> model.enroll(displayName, deviceName) },
                     onRefreshContribution = model::refreshEnrollment,
                     onUpdateDevice = { model.updateDevice(it) },
+                    onSubmitForum = model::submitForum,
                     onOptOut = model::optOut,
                     onOpenStarred = { star ->
                         val url = try { validTopicUrl(URL(star.url)) } catch (_: Exception) { null }

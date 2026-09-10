@@ -65,6 +65,7 @@ interface ForumIndexApi {
     fun updateInstallation(deviceName: String, token: String): Installation
     fun deleteInstallation(token: String)
     fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String)
+    fun submitForum(url: String, token: String)
 }
 
 sealed class ForumIndexApiException(message: String) : Exception(message) {
@@ -133,6 +134,14 @@ class HttpForumIndexApi(
         return decode { ForumIndexJson.installationEnvelope(body) }
     }
 
+    override fun submitForum(url: String, token: String) {
+        require(url.toByteArray(StandardCharsets.UTF_8).size <= 1_000) { "forum url is too long" }
+        request(
+            url("/api/v2/forum-submission"), "POST",
+            JSONObject().put("url", url).toString(), checkedToken(token), forbiddenExpiresAccess = false,
+        )
+    }
+
     override fun deleteInstallation(token: String) {
         request(url("/api/v2/installation"), "DELETE", token = checkedToken(token))
     }
@@ -151,7 +160,13 @@ class HttpForumIndexApi(
         throw ForumIndexApiException.InvalidResponse()
     }
 
-    private fun request(url: URL, method: String, body: String? = null, token: String? = null): String {
+    private fun request(
+        url: URL,
+        method: String,
+        body: String? = null,
+        token: String? = null,
+        forbiddenExpiresAccess: Boolean = true,
+    ): String {
         val connection = try {
             connectionFactory(url)
         } catch (_: Exception) {
@@ -169,7 +184,9 @@ class HttpForumIndexApi(
                 connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
             }
             val status = connection.responseCode
-            if (token != null && (status == 401 || status == 403)) throw ForumIndexApiException.ExpiredAccess()
+            if (token != null && (status == 401 || (status == 403 && forbiddenExpiresAccess))) {
+                throw ForumIndexApiException.ExpiredAccess()
+            }
             if (status !in 200..299) throw ForumIndexApiException.Http(status)
             return readBounded(connection.inputStream, MAX_RESPONSE_BYTES)
         } catch (error: ForumIndexApiException) {
