@@ -339,10 +339,9 @@ class ForumIndexViewModelTest {
         completeNext(runner) // Keystore save
         assertEquals(1, store.saves)
         vm.optOut(); runCurrent()
-        completeNext(runner) // API
-        assertEquals(0, store.deletes)
         completeNext(runner) // Keystore delete
         assertEquals(1, store.deletes)
+        completeNext(runner) // API
     }
 
     @Test fun expiredAccessClearsEnrollmentAndStarsSurviveOptOut() = runTest(dispatcher.scheduler) {
@@ -357,6 +356,19 @@ class ForumIndexViewModelTest {
         vm.optOut(); advanceUntilIdle()
         assertNull(store.value)
         assertEquals(listOf(star(7)), vm.stars.value)
+    }
+
+    @Test fun optOutClearsLocalEnrollmentWhenServerIsUnavailable() = runTest(dispatcher.scheduler) {
+        val store = MemoryTokenStore(enrollment())
+        val api = FakeApi(deleteFailure = true)
+        val vm = viewModel(api, tokens = store)
+        advanceUntilIdle()
+
+        vm.optOut(); advanceUntilIdle()
+
+        assertNull(store.value)
+        assertNull(vm.uiState.value.contribution.enrollment)
+        assertEquals(listOf("delete:token"), api.calls.filter { it.startsWith("delete:") })
     }
 
     @Test fun staleContributionResultCannotOverwriteReloadedEnrollment() = runTest(dispatcher.scheduler) {
@@ -573,6 +585,7 @@ class ForumIndexViewModelTest {
         val createFailure: Boolean = false,
         val expireFetch: Boolean = false,
         val expireDelete: Boolean = false,
+        val deleteFailure: Boolean = false,
         val actionFailure: Boolean = false,
         val expireAction: Boolean = false,
         val expirePersonalized: Boolean = false,
@@ -590,7 +603,11 @@ class ForumIndexViewModelTest {
         override fun fetchInstallation(token: String): Installation { calls += "fetch:$token"; if (expireFetch) throw ForumIndexApiException.ExpiredAccess(); return enrollment(token).installation }
         override fun updateInstallation(deviceName: String, token: String): Installation { calls += "update:$deviceName"; return enrollment(token).installation.copy(deviceName = deviceName) }
         override fun submitForum(url: String, token: String) { calls += "submit:$url:$token" }
-        override fun deleteInstallation(token: String) { calls += "delete:$token"; if (expireDelete) throw ForumIndexApiException.ExpiredAccess() }
+        override fun deleteInstallation(token: String) {
+            calls += "delete:$token"
+            if (expireDelete) throw ForumIndexApiException.ExpiredAccess()
+            if (deleteFailure) throw ForumIndexApiException.Transport()
+        }
         override fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String) {
             calls += "action:$topicId:$kind:$active"
             if (expireAction) throw ForumIndexApiException.ExpiredAccess()

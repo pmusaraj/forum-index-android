@@ -143,7 +143,7 @@ class SecureTokenStore(context: Context) : EnrollmentStore {
     }
 
     override fun delete() {
-        preferences.edit().clear().apply()
+        check(preferences.edit().clear().commit()) { "could not clear contribution credential" }
     }
 
     private fun signedOut(): Enrollment? {

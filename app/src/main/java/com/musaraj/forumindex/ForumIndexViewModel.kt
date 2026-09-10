@@ -510,15 +510,19 @@ class ForumIndexViewModel(
         contributionLoading()
         viewModelScope.launch {
             try {
-                if (enrollment != null) calls.run { api.deleteInstallation(enrollment.token) }
-                if (generation != contributionGeneration || currentToken() != enrollment?.token) return@launch
                 calls.run(tokenStore::delete)
-                if (generation == contributionGeneration && currentToken() == enrollment?.token) {
-                    contributionSuccess(null)
-                    reloadMainFeed()
+                if (generation != contributionGeneration || currentToken() != enrollment?.token) return@launch
+                contributionSuccess(null)
+                reloadMainFeed()
+                if (enrollment != null) {
+                    try {
+                        calls.run { api.deleteInstallation(enrollment.token) }
+                    } catch (_: CancellationException) {
+                        throw CancellationException()
+                    } catch (_: ForumIndexApiException) {
+                        // Local opt-out is complete; server revocation is best effort.
+                    }
                 }
-            } catch (_: ForumIndexApiException.ExpiredAccess) {
-                expireEnrollment(generation, enrollment?.token)
             } catch (_: CancellationException) {
                 throw CancellationException()
             } catch (_: Exception) {
