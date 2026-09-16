@@ -247,7 +247,9 @@ class TopicInteractionUiTest {
 
         compose.onNodeWithContentDescription("Contribution settings").performClick()
 
-        compose.onNodeWithText("When contributions are enabled, Main is personalized using topics you read and star. Otherwise it follows overall trending activity.").assertIsDisplayed()
+        compose.onNodeWithText("Forum Index").assertIsDisplayed()
+        compose.onNodeWithText("This is an app showing activity in Discourse forums across different subjects. Your reading and starring activity anonymously helps improve the results.").assertIsDisplayed()
+        compose.onNodeWithText("When you have contributions enabled, your Main feed will be personalized based on starred and read topics.").assertIsDisplayed()
         compose.onNodeWithTag("forum-submission-url").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("submit-forum").assertIsDisplayed()
         compose.runOnIdle {

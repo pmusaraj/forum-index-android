@@ -322,7 +322,7 @@ private fun ContributionSheet(
                 .padding(horizontal = 16.dp, vertical = 4.dp).testTag("contribution-sheet"),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Contributions", Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("Forum Index", Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 IconButton(
                     onClick = onDismiss,
                     modifier = Modifier.size(48.dp).semantics { contentDescription = "Close contribution settings" },
@@ -330,7 +330,12 @@ private fun ContributionSheet(
             }
 
             Text(
-                "When contributions are enabled, Main is personalized using topics you read and star. Otherwise it follows overall trending activity.",
+                "This is an app showing activity in Discourse forums across different subjects. Your reading and starring activity anonymously helps improve the results.",
+                color = Color.Black.copy(alpha = .65f), fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "When you have contributions enabled, your Main feed will be personalized based on starred and read topics.",
                 color = Color.Black.copy(alpha = .65f), fontSize = 13.sp,
             )
             Spacer(Modifier.height(16.dp))
