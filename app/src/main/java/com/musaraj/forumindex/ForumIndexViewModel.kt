@@ -69,6 +69,7 @@ data class UiState(
     val selectedDestination: Destination? = null,
     val feeds: Map<String, FeedState> = emptyMap(),
     val contribution: ContributionState = ContributionState(),
+    val openedTopicIds: Set<String> = emptySet(),
 )
 
 interface BlockingCallRunner {
@@ -85,10 +86,36 @@ class ForumIndexViewModel(
     private val tokenStore: EnrollmentStore,
     private val calls: BlockingCallRunner = DispatcherCallRunner(),
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(UiState())
+    private val mutableUiState = MutableStateFlow(UiState(openedTopicIds = preferences.openedTopicIds))
     val uiState: StateFlow<UiState> = mutableUiState.asStateFlow()
     private val mutableStars = MutableStateFlow(preferences.stars)
     val stars: StateFlow<List<StarredTopic>> = mutableStars.asStateFlow()
+    private val mutableDetailSession = MutableStateFlow<TopicDetailSession?>(null)
+    val detailSession = mutableDetailSession.asStateFlow()
+    private val mutableFeedReturnTarget = MutableStateFlow<FeedReturnTarget?>(null)
+    val feedReturnTarget = mutableFeedReturnTarget.asStateFlow()
+
+    fun openTopic(topic: Topic) {
+        val state = mutableUiState.value
+        val destination = state.selectedDestination ?: return
+        val session = TopicDetailSession.create(state.feeds[destination.id]?.rows.orEmpty(), topic, destination.id) ?: return
+        mutableFeedReturnTarget.value = null
+        mutableDetailSession.value = session
+        markOpened(topic)
+    }
+
+    fun selectDetailTopic(index: Int) {
+        val current = mutableDetailSession.value ?: return
+        val selected = current.selecting(index)
+        if (selected == current) return
+        mutableDetailSession.value = selected
+        mutableFeedReturnTarget.value = FeedReturnTarget(selected.destinationId, selected.currentTopic.identity)
+        markOpened(selected.currentTopic)
+    }
+
+    fun closeTopic() {
+        mutableDetailSession.value = null
+    }
 
     private var launched = false
     private var taxonomyGeneration = 0
@@ -467,6 +494,7 @@ class ForumIndexViewModel(
 
     fun markOpened(forumId: Int, topicId: Int) {
         preferences.markOpened(forumId, topicId)
+        mutableUiState.value = mutableUiState.value.copy(openedTopicIds = preferences.openedTopicIds)
         if (mutableUiState.value.contribution.enrollment != null) report(topicId, "read", true)
     }
 
@@ -474,6 +502,15 @@ class ForumIndexViewModel(
     fun isOpened(forumId: Int, topicId: Int) = preferences.isOpened(forumId, topicId)
 
     fun isStarred(topic: Topic) = mutableStars.value.any { it.matches(topic) }
+    fun isStarred(star: StarredTopic) = mutableStars.value.any { it.sameIdentity(star) }
+
+    fun toggleStar(star: StarredTopic) {
+        val url = try { validTopicUrl(java.net.URL(star.url)) } catch (_: Exception) { null } ?: return
+        val active = !isStarred(star)
+        saveStars(if (active) mutableStars.value + star.copy(url = url.toString())
+            else mutableStars.value.filterNot { it.sameIdentity(star) })
+        if (mutableUiState.value.contribution.enrollment != null) star.topicId?.let { report(it, "starred", active) }
+    }
 
     fun toggleStar(topic: Topic) {
         val url = validTopicUrl(topic.url) ?: return
@@ -490,12 +527,13 @@ class ForumIndexViewModel(
         val updated = mutableStars.value.filterNot { it.sameIdentity(star) }
         if (updated.size == mutableStars.value.size) return
         saveStars(updated)
-        if (mutableUiState.value.contribution.enrollment != null) report(star.topicId, "starred", false)
+        if (mutableUiState.value.contribution.enrollment != null) star.topicId?.let { report(it, "starred", false) }
     }
 
     fun markOpened(star: StarredTopic) {
-        star.forumId?.let { preferences.markOpened(it, star.topicId) }
-        if (mutableUiState.value.contribution.enrollment != null) report(star.topicId, "read", true)
+        if (star.forumId != null && star.topicId != null) preferences.markOpened(star.forumId, star.topicId)
+        mutableUiState.value = mutableUiState.value.copy(openedTopicIds = preferences.openedTopicIds)
+        if (mutableUiState.value.contribution.enrollment != null) star.topicId?.let { report(it, "read", true) }
     }
 
     private fun saveStars(updated: List<StarredTopic>) {
@@ -623,7 +661,7 @@ class ForumIndexViewModel(
     private fun contributionMatches(generation: Int, token: String) = generation == contributionGeneration && currentToken() == token
     private fun StarredTopic.matches(topic: Topic) = if (forumId != null) forumId == topic.forum.id && topicId == topic.id
         else url.isNotEmpty() && url == topic.url?.toString()
-    private fun StarredTopic.sameIdentity(other: StarredTopic) = if (forumId != null && other.forumId != null) {
+    private fun StarredTopic.sameIdentity(other: StarredTopic) = if (forumId != null && other.forumId != null && topicId != null && other.topicId != null) {
         forumId == other.forumId && topicId == other.topicId
     } else url.isNotEmpty() && url == other.url
 

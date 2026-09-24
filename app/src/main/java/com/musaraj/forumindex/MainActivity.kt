@@ -17,8 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
@@ -48,47 +47,47 @@ class MainActivity : ComponentActivity() {
                 val model: ForumIndexViewModel = viewModel(factory = factory)
                 val state by model.uiState.collectAsState()
                 val stars by model.stars.collectAsState()
-                var openTopic by remember { mutableStateOf<Topic?>(null) }
+                val detailSession by model.detailSession.collectAsState()
+                val feedReturnTarget by model.feedReturnTarget.collectAsState()
                 LaunchedEffect(model) { model.launch() }
-                ForumIndexReader(
-                    uiState = state,
-                    stars = stars,
-                    isOpened = model::isOpened,
-                    isStarred = model::isStarred,
-                    onSelect = model::select,
-                    onRetryTaxonomy = model::refreshTaxonomy,
-                    onUpdateVisibleOrder = model::updateVisibleOrder,
-                    onRefresh = { model.refreshFeed(it) },
-                    onRetry = { model.retry(it) },
-                    onLoadNextPage = { model.loadNextPage(it) },
-                    onOpenTopic = { topic ->
-                        validTopicUrl(topic.url)?.let {
-                            model.markOpened(topic)
-                            openTopic = topic
-                        }
-                    },
-                    onToggleStar = model::toggleStar,
-                    onReport = { topic, kind -> model.report(topic.id, kind, true) },
-                    onEnroll = { displayName, deviceName -> model.enroll(displayName, deviceName) },
-                    onRefreshContribution = model::refreshEnrollment,
-                    onUpdateDevice = { model.updateDevice(it) },
-                    onSubmitForum = model::submitForum,
-                    onOptOut = model::optOut,
-                    onOpenStarred = { star ->
-                        val url = try { validTopicUrl(URL(star.url)) } catch (_: Exception) { null }
-                        if (url != null) {
-                            model.markOpened(star)
-                            openExternalTopic(url, ::startActivity)
-                        }
-                    },
-                    onRemoveStar = model::removeStar,
-                )
-                openTopic?.let { topic ->
-                    TopicWebView(
-                        topic = topic,
-                        starred = model.isStarred(topic),
-                        onToggleStar = { model.toggleStar(topic) },
-                        onDismiss = { openTopic = null },
+                Box(if (detailSession != null) Modifier.clearAndSetSemantics { } else Modifier) {
+                    ForumIndexReader(
+                        uiState = state,
+                        stars = stars,
+                        isOpened = { "${it.forum.id}:${it.id}" in state.openedTopicIds },
+                        isStarred = remember(stars) { { topic -> model.isStarred(topic) } },
+                        onSelect = model::select,
+                        onRetryTaxonomy = model::refreshTaxonomy,
+                        onUpdateVisibleOrder = model::updateVisibleOrder,
+                        onRefresh = { model.refreshFeed(it) },
+                        onRetry = { model.retry(it) },
+                        onLoadNextPage = { model.loadNextPage(it) },
+                        onOpenTopic = model::openTopic,
+                        returnTarget = feedReturnTarget,
+                        onToggleStar = model::toggleStar,
+                        onReport = { topic, kind -> model.report(topic.id, kind, true) },
+                        onEnroll = { displayName, deviceName -> model.enroll(displayName, deviceName) },
+                        onRefreshContribution = model::refreshEnrollment,
+                        onUpdateDevice = { model.updateDevice(it) },
+                        onSubmitForum = model::submitForum,
+                        onOptOut = model::optOut,
+                        onOpenStarred = { star ->
+                            val url = try { validTopicUrl(URL(star.url)) } catch (_: Exception) { null }
+                            if (url != null) {
+                                model.markOpened(star)
+                                openExternalTopic(url, ::startActivity)
+                            }
+                        },
+                        onRemoveStar = model::removeStar,
+                    )
+                }
+                detailSession?.let { session ->
+                    TopicDetailScreen(
+                        session = session,
+                        isStarred = remember(stars) { { topic -> model.isStarred(topic) } },
+                        onSelect = model::selectDetailTopic,
+                        onToggleStar = model::toggleStar,
+                        onDismiss = model::closeTopic,
                     )
                 }
             }

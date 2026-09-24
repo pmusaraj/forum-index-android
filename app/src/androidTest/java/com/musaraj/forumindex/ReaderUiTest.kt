@@ -26,6 +26,16 @@ import java.net.URL
 class ReaderUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun returningFromPagedTopicMovesToItsFeedRow() {
+        var target by mutableStateOf<FeedReturnTarget?>(null)
+        val state = loadedState(rows = 40)
+        val topic = state.feeds.getValue("main-feed").rows[25]
+        compose.setContent { ForumIndexReader(state, returnTarget = target) }
+        compose.runOnIdle { target = FeedReturnTarget("main-feed", topic.identity) }
+        compose.onNodeWithTag("topic-${topic.forum.id}-${topic.id}").assertIsDisplayed()
+        compose.onNodeWithText("Topic 1").assertDoesNotExist()
+    }
+
     @Test fun headerRemainsFixedAfterFeedScroll() {
         compose.setContent { ForumIndexReader(loadedState(rows = 40)) }
         val before = compose.onNodeWithTag("reader-header").fetchSemanticsNode().boundsInRoot.top

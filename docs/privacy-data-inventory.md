@@ -10,7 +10,8 @@ This is a source-code inventory for preparing disclosures, not a published priva
 | Installation identity and bearer token | Server-issued installation identity; bearer token encrypted locally with Android Keystore and used for authenticated requests | Assess user/device identifiers; this is pseudonymous, not guaranteed anonymous |
 | Reads, star/unstar actions and topic reports | Topic ID, action kind and active flag sent while enrolled | Assess app interactions and relevant browsing-history categories; used to improve index and personalize feed |
 | Forum submissions | Trusted contributors can send a forum URL | Assess other user-generated content; confirm moderation and retention |
-| Opt-out | DELETE `/api/v2/installation`, then local credential removal on success; local stars retained | Verify deletion of installation and associated actions, backups and retention exceptions before promising deletion |
+| Opt-out | Local credential removal first, then best-effort DELETE `/api/v2/installation`; local stars retained | Verify deletion of installation and associated actions, backups and retention exceptions before promising deletion |
+| Native topic previews | Credential-free HTTPS requests to forum topic URLs with `Accept: text/markdown`; additional reply pages, author avatars, and body images may be fetched | Disclose requests to original forum and image hosts; no contributor token is sent to these hosts |
 | Forum pages | HTTPS WebView with JavaScript, plus external browser opening | Third-party hosts receive requests and may set cookies or load trackers/content. Audit applicable WebView collection/sharing and forum privacy practices |
 | Analytics, ads, crash reporting SDKs | None explicitly configured in direct dependencies | Check transitive dependencies, backend telemetry and displayed web content before final declarations |
 

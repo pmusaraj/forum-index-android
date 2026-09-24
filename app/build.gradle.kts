@@ -65,6 +65,11 @@ tasks.matching { it.name == "bundleRelease" }.configureEach {
 }
 
 dependencies {
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.image)
+    implementation(libs.markwon.tables)
+    implementation(libs.markwon.strikethrough)
+    implementation(libs.markwon.tasklist)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")

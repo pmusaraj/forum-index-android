@@ -94,6 +94,7 @@ private val ReaderAccent = Color(0xFF008C95)
 internal fun ForumIndexReader(
     uiState: UiState,
     stars: List<StarredTopic> = emptyList(),
+    returnTarget: FeedReturnTarget? = null,
     isOpened: (Topic) -> Boolean = { false },
     isStarred: (Topic) -> Boolean = { false },
     onSelect: (Destination) -> Unit = {},
@@ -206,6 +207,16 @@ internal fun ForumIndexReader(
             val destination = visible[page]
             holder.SaveableStateProvider(destination.id) {
                 val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+                val feed = uiState.feeds[destination.id] ?: FeedState.Initial
+                LaunchedEffect(returnTarget) {
+                    if (returnTarget?.destinationId == destination.id) {
+                        val row = feed.rows.indexOfFirst { it.identity == returnTarget.topic }
+                        if (row >= 0) {
+                            val banner = if (feed is FeedState.Refreshing || feed is FeedState.Failed) 1 else 0
+                            listState.scrollToItem(row + banner)
+                        }
+                    }
+                }
                 FeedPage(
                     destination = destination,
                     feed = uiState.feeds[destination.id] ?: FeedState.Initial,
@@ -217,6 +228,7 @@ internal fun ForumIndexReader(
                     onLoadNextPage = onLoadNextPage,
                     onOpenTopic = onOpenTopic,
                     onToggleStar = onToggleStar,
+                    highlightedTopic = returnTarget?.takeIf { it.destinationId == destination.id }?.topic,
                     onReport = { topic, kind ->
                         if (uiState.contribution.enrollment == null) {
                             contributionOpen = true
@@ -486,6 +498,7 @@ private fun FeedPage(
     onOpenTopic: (Topic) -> Unit,
     onToggleStar: (Topic) -> Unit,
     onReport: (Topic, String) -> Unit,
+    highlightedTopic: TopicIdentity? = null,
 ) {
     PullToRefreshBox(
         isRefreshing = feed is FeedState.Refreshing,
@@ -503,11 +516,11 @@ private fun FeedPage(
                         Text("No topics yet")
                     }
                 }
-                is FeedState.Loaded -> topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport)
+                is FeedState.Loaded -> topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport, highlightedTopic)
                 is FeedState.Refreshing -> {
                     if (feed.rows.isEmpty()) skeletonRows() else {
                         item { StatusBanner("Refreshing…") }
-                        topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport)
+                        topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport, highlightedTopic)
                     }
                 }
                 is FeedState.Failed -> {
@@ -521,7 +534,7 @@ private fun FeedPage(
                         }
                     } else {
                         item { StatusBanner("${feed.message} Showing saved topics.") }
-                        topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport)
+                        topicRows(feed.rows, isOpened, isStarred, onOpenTopic, onToggleStar, onReport, highlightedTopic)
                     }
                 }
             }
@@ -553,9 +566,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.topicRows(
     onOpenTopic: (Topic) -> Unit,
     onToggleStar: (Topic) -> Unit,
     onReport: (Topic, String) -> Unit,
+    highlightedTopic: TopicIdentity?,
 ) {
     itemsIndexed(rows, key = { _, topic -> "${topic.forum.id}:${topic.id}" }) { index, topic ->
-        TopicRow(topic, index == 0, isOpened(topic), isStarred(topic), onOpenTopic, onToggleStar, onReport)
+        TopicRow(topic, index == 0, isOpened(topic), isStarred(topic), onOpenTopic, onToggleStar, onReport, topic.identity == highlightedTopic)
     }
 }
 
@@ -568,11 +582,13 @@ private fun TopicRow(
     onOpenTopic: (Topic) -> Unit,
     onToggleStar: (Topic) -> Unit,
     onReport: (Topic, String) -> Unit,
+    highlighted: Boolean,
 ) {
     var actionsOpen by remember { mutableStateOf(false) }
     val validUrl = validTopicUrl(topic.url) != null
     Column(
         Modifier.fillMaxWidth()
+            .background(if (highlighted) ReaderAccent.copy(alpha = .09f) else Color.Transparent)
             .combinedClickable(
                 onClick = { if (validUrl) onOpenTopic(topic) },
                 onLongClick = { actionsOpen = true },
@@ -629,7 +645,7 @@ private fun TopicActions(
 }
 
 @Composable
-private fun ForumIcon(forum: ForumSummary) {
+internal fun ForumIcon(forum: ForumSummary) {
     val bitmap by produceState<Bitmap?>(null, forum.iconUrl) {
         value = withContext(Dispatchers.IO) { forum.iconUrl?.let(::loadIcon) }
     }

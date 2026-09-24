@@ -35,6 +35,7 @@ data class ForumSummary(
     val slug: String,
     val baseUrl: URL?,
     val iconUrl: URL?,
+    val supportsMarkdown: Boolean = false,
 )
 data class FeedEnvelope(val count: Int, val results: List<Topic>)
 data class Installation(
@@ -289,6 +290,7 @@ internal object ForumIndexJson {
     private fun JSONObject.forum() = ForumSummary(
         getInt("id"), getString("name"), getString("slug"),
         acceptedUrl(optStringOrNull("base_url")), acceptedUrl(optStringOrNull("icon_url")),
+        optBoolean("supports_markdown", false),
     )
 
     private fun JSONObject.installation() = Installation(

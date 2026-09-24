@@ -504,6 +504,44 @@ class ForumIndexViewModelTest {
         assertEquals(listOf(star(2)), vm.stars.value)
     }
 
+    @Test fun linkedBookmarksAreLocalAndNeverReportTheSourceTopic() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val vm = viewModel(api, tokens = MemoryTokenStore(enrollment()))
+        advanceUntilIdle()
+        val linked = StarredTopic("Linked reply", "https://example.com/t/other/99/7#reply", "Forum")
+        vm.toggleStar(linked); advanceUntilIdle()
+        assertTrue(vm.isStarred(linked))
+        assertEquals(listOf(linked), vm.stars.value)
+        vm.markOpened(linked); advanceUntilIdle()
+        vm.removeStar(linked); advanceUntilIdle()
+        assertTrue(vm.stars.value.isEmpty())
+        assertFalse(api.calls.any { it.startsWith("action:") })
+        vm.toggleStar(topic(1).bookmark()); advanceUntilIdle()
+        assertTrue(vm.isStarred(topic(1)))
+        assertTrue(api.calls.contains("action:1:starred:true"))
+    }
+
+    @Test fun detailPagingMarksOnlySelectedTopicsAndReturnsToTheSourceFeed() = runTest(dispatcher.scheduler) {
+        val api = FakeApi(mainFeeds = ArrayDeque(listOf(feed(topic(1), topic(2), topic(3)))))
+        val vm = viewModel(api, tokens = MemoryTokenStore(enrollment()))
+        vm.launch(); advanceUntilIdle()
+        vm.openTopic(topic(1)); advanceUntilIdle()
+        assertTrue(vm.isOpened(topic(1)))
+        assertFalse(vm.isOpened(topic(2)))
+        assertNull(vm.feedReturnTarget.value)
+        vm.selectDetailTopic(2); advanceUntilIdle()
+        assertTrue(vm.isOpened(topic(3)))
+        assertFalse(vm.isOpened(topic(2)))
+        assertEquals(FeedReturnTarget("main-feed", topic(3).identity), vm.feedReturnTarget.value)
+        vm.selectDetailTopic(2); advanceUntilIdle()
+        assertEquals(1, api.calls.count { it == "action:3:read:true" })
+        vm.closeTopic()
+        assertNull(vm.detailSession.value)
+        assertEquals(topic(3).identity, vm.feedReturnTarget.value?.topic)
+        vm.openTopic(topic(2))
+        assertNull(vm.feedReturnTarget.value)
+    }
+
     private suspend fun TestScope.completeNext(runner: ControlledRunner, value: Any? = ControlledRunner.RUN_CALL) {
         runCurrent()
         assertTrue("expected a pending blocking call", runner.pendingCount > 0)

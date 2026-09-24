@@ -18,7 +18,7 @@ data class StarredTopic(
     val title: String,
     val url: String,
     val forumName: String,
-    val topicId: Int,
+    val topicId: Int? = null,
     val forumId: Int? = null,
 )
 
@@ -45,8 +45,8 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
                     it.getString("title"),
                     it.getString("url"),
                     it.getString("forum_name"),
-                    it.getInt("topic_id"),
-                    it.optInt("forum_id").takeIf { _ -> it.has("forum_id") },
+                    if (it.isNull("topic_id")) null else it.getInt("topic_id"),
+                    if (it.isNull("forum_id")) null else it.getInt("forum_id"),
                 )
             }
         }

@@ -2,6 +2,8 @@
 
 Native Android companion for Forum Index, built with Kotlin and Jetpack Compose.
 
+The Android app aims for feature and behavior parity with the [iOS application](https://github.com/pmusaraj/forum-index-app). See [the parity goal and comparison process](docs/ios-parity.md) and [implementation checklist](docs/parity-checklist.md).
+
 ## Requirements
 
 - Android Studio Quail 4 or newer
@@ -25,7 +27,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## Behavior
 
-The app reads the existing Forum Index public API, keeps feed caches in memory, and stores subject choices, opened topics, and stars locally. Contribution enrollment is optional; its bearer token is encrypted with Android Keystore and excluded from backup. Android contributions are currently shown as device-unverified because server-side Android attestation is not implemented.
+The app reads the existing Forum Index public API, keeps feed caches in memory, and stores subject choices, opened topics, and stars locally. Topics from supported forums open in a native Markdown reader with paginated replies and a full-page toggle. Same-site links open another preview; Back restores the previous page and scroll position, while Share and Star follow the displayed page. Swipe between topics, then use Back or Close to return to the selected feed row. Contribution enrollment is optional; its bearer token is encrypted with Android Keystore and excluded from backup. Android contributions are currently shown as device-unverified because server-side Android attestation is not implemented.
 
 ## Google Play release
 

@@ -31,6 +31,13 @@ class ForumIndexApiTest {
             .forEach { slug -> assertThrows(IllegalArgumentException::class.java) { api.subjectTopicsUrl(slug, 1) } }
     }
 
+    @Test fun markdownCapabilityDefaultsToFalseAndReadsTrue() {
+        for ((field, expected) in listOf("" to false, ",\"supports_markdown\":null" to false, ",\"supports_markdown\":false" to false, ",\"supports_markdown\":true" to true)) {
+            val json = """{"count":1,"results":[{"id":1,"title":"Topic","forum":{"id":1,"name":"Forum","slug":"forum"$field}}]}"""
+            assertEquals(expected, ForumIndexJson.feed(json).results.single().forum.supportsMarkdown)
+        }
+    }
+
     @Test fun decodesTaxonomyDefaults() {
         val value = ForumIndexJson.navigation("""{"version":"v2","window":"5d","subjects":[{"id":7,"name":"AI","slug":"ai","topic_count":9}]}""")
         assertEquals(NavigationEnvelope("v2", "5d", listOf(Subject(7, "AI", "ai", "", 0, false, 9))), value)

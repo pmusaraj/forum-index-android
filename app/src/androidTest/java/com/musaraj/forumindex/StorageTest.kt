@@ -31,6 +31,7 @@ class StorageTest {
         val stars = listOf(
             StarredTopic("Title \"one\"", "https://forum.test/t/1", "Forum", 11, forumId = 3),
             StarredTopic("Two", "https://other.test/t/2", "Other", 22),
+            StarredTopic("Linked reply", "https://forum.test/t/other/99/7#reply", "Forum"),
         )
         preferences.visibleSubjectOrder = listOf("main-feed", "parent:ai")
         preferences.stars = stars

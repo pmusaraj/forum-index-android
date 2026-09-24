@@ -205,7 +205,7 @@ class TopicInteractionUiTest {
         compose.runOnIdle { assertEquals("Tablet", renamed) }
         listOf("Star changes", "Reads", "Low quality reports", "Inappropriate reports", "Wrong subject reports")
             .forEach { compose.onNodeWithText(it).assertExists() }
-        compose.onNodeWithText("Opening a topic reports a read. Stars stay local. Actions are sent only while contributions are enabled.").assertExists()
+        compose.onNodeWithText("While contributions are enabled, opening a topic sends a read action, and starring or reporting a topic sends that action to Forum Index. Your saved stars also stay on this device. You can opt out below to stop sending actions.").assertExists()
         listOf("Device ID", "Public ID", "Apple", "Play Integrity", "ranking", "Up votes", "Down votes")
             .forEach { compose.onNodeWithText(it, substring = true, ignoreCase = true).assertDoesNotExist() }
         compose.runOnIdle {
@@ -248,7 +248,7 @@ class TopicInteractionUiTest {
         compose.onNodeWithContentDescription("Contribution settings").performClick()
 
         compose.onNodeWithText("Forum Index").assertIsDisplayed()
-        compose.onNodeWithText("This is an app showing activity in Discourse forums across different subjects. Your reading and starring activity anonymously helps improve the results.").assertIsDisplayed()
+        compose.onNodeWithText("This app shows activity in Discourse forums across different subjects. If you enable contributions, your reading and starring activity is linked to your contributor installation to help improve the results.").assertIsDisplayed()
         compose.onNodeWithText("When you have contributions enabled, your Main feed will be personalized based on starred and read topics.").assertIsDisplayed()
         compose.onNodeWithTag("forum-submission-url").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("submit-forum").assertIsDisplayed()
