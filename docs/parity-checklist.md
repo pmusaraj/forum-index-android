@@ -31,5 +31,6 @@
 - [x] Live production feed smoke test
 - [x] Live topic WebView smoke test
 - [x] Reader, WebView, and contribution-sheet screenshots inspected
-- [ ] Play Store signing and publishing (not requested)
+- [x] Play Store upload-signing configuration and release documentation
+- [ ] Signed Play bundle, store assets, privacy disclosures, and Console submission (see play-store-release.md)
 - [ ] Play Integrity/backend attestation (deferred until trusted Android devices are required)

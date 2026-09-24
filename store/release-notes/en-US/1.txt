@@ -1,0 +1,5 @@
+Welcome to Forum Index for Android.
+• Discover discussions across Discourse forums.
+• Customize your subject tabs and save starred topics.
+• Read and share topics from the app.
+• Optionally contribute to improve the index and personalize your feed.

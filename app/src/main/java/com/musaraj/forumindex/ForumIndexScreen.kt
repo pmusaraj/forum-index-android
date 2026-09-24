@@ -330,7 +330,7 @@ private fun ContributionSheet(
             }
 
             Text(
-                "This is an app showing activity in Discourse forums across different subjects. Your reading and starring activity anonymously helps improve the results.",
+                "This app shows activity in Discourse forums across different subjects. If you enable contributions, your reading and starring activity is linked to your contributor installation to help improve the results.",
                 color = Color.Black.copy(alpha = .65f), fontSize = 13.sp,
             )
             Spacer(Modifier.height(16.dp))
@@ -341,7 +341,7 @@ private fun ContributionSheet(
             Spacer(Modifier.height(16.dp))
 
             if (installation == null) {
-                Text("Optionally share simple topic actions to improve the public index.")
+                Text("Contributions are optional. Enabling them sends your display name, device name, and topic actions to Forum Index to improve the public index and personalize your feed.")
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = displayName,
@@ -437,7 +437,7 @@ private fun ContributionSheet(
                 Text(it, Modifier.fillMaxWidth().padding(vertical = 5.dp))
             }
             Text(
-                "Opening a topic reports a read. Stars stay local. Actions are sent only while contributions are enabled.",
+                "While contributions are enabled, opening a topic sends a read action, and starring or reporting a topic sends that action to Forum Index. Your saved stars also stay on this device. You can opt out below to stop sending actions.",
                 color = Color.Black.copy(alpha = .65f), fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
             )
             if (installation != null) {

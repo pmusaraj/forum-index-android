@@ -26,3 +26,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Behavior
 
 The app reads the existing Forum Index public API, keeps feed caches in memory, and stores subject choices, opened topics, and stars locally. Contribution enrollment is optional; its bearer token is encrypted with Android Keystore and excluded from backup. Android contributions are currently shown as device-unverified because server-side Android attestation is not implemented.
+
+## Google Play release
+
+See [the release guide](docs/play-store-release.md) for upload signing, versioning, bundle builds, store materials, testing, and remaining Console requirements. Store listing drafts are in `store/`; the [data inventory](docs/privacy-data-inventory.md) supports privacy-policy and Data safety preparation.

@@ -1,0 +1,12 @@
+Discover conversations across Discourse communities with Forum Index.
+
+Browse recent discussions in the main feed, choose the subjects you want to follow, and arrange your subject tabs. Open topics in the app, share a discussion, or save it to your starred list for later.
+
+Features:
+• Browse discussions across multiple forums.
+• Customize and reorder your subject tabs.
+• Save starred topics on your device.
+• Read topics in the built-in viewer or open them externally.
+• Optionally enable contributions to personalize your main feed and help improve the index through reading, starring, and topic reports.
+
+You can browse without enrolling as a contributor. Contributions are optional and can be turned off in the app. An internet connection is required to load feeds and forum pages.
