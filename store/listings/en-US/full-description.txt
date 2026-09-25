@@ -7,6 +7,6 @@ Features:
 • Customize and reorder your subject tabs.
 • Save starred topics on your device.
 • Read topics in the built-in viewer or open them externally.
-• Optionally enable contributions to personalize your main feed and help improve the index through reading, starring, and topic reports.
+• Personalize your main feed through reading, starring, and topic reports, with persistent opt-out in Settings.
 
-You can browse without enrolling as a contributor. Contributions are optional and can be turned off in the app. An internet connection is required to load feeds and forum pages.
+Your device automatically enrolls with a generated contributor name. You can opt out in Settings and continue browsing; saved stars stay on your device. Choose Auto, Light, or Dark appearance. An internet connection is required to load feeds and forum pages.

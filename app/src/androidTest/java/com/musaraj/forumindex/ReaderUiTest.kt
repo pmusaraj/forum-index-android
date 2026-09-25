@@ -3,6 +3,9 @@ package com.musaraj.forumindex
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
@@ -34,6 +37,17 @@ class ReaderUiTest {
         compose.runOnIdle { target = FeedReturnTarget("main-feed", topic.identity) }
         compose.onNodeWithTag("topic-${topic.forum.id}-${topic.id}").assertIsDisplayed()
         compose.onNodeWithText("Topic 1").assertDoesNotExist()
+    }
+
+    @Test fun verticalFeedDragWithSidewaysDriftScrollsWithoutChangingTabs() {
+        var state by mutableStateOf(loadedState(rows = 40, subjectCount = 2))
+        compose.setContent { ForumIndexReader(state, onSelect = { state = state.selecting(it) }) }
+        val feed = compose.onNodeWithTag("feed-main-feed")
+        feed.performTouchInput {
+            swipe(Offset(width * .7f, height * .8f), Offset(width * .4f, height * .2f), 600)
+        }
+        compose.onNodeWithTag("tab-main-feed").assertIsSelected()
+        assertTrue(feed.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value() > 0f)
     }
 
     @Test fun headerRemainsFixedAfterFeedScroll() {

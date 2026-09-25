@@ -26,6 +26,8 @@ interface PreferencesStore {
     var visibleSubjectOrder: List<String>
     var stars: List<StarredTopic>
     var openedTopicIds: Set<String>
+    var contributionsOptedOut: Boolean
+    var contributorDisplayName: String?
     var deviceNameOverride: String?
     fun markOpened(forumId: Int, topicId: Int)
     fun isOpened(forumId: Int, topicId: Int): Boolean
@@ -33,6 +35,18 @@ interface PreferencesStore {
 
 class ForumIndexPreferences(context: Context) : PreferencesStore {
     private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+
+    var appearance: AppAppearance
+        get() = AppAppearance.entries.firstOrNull { it.name == preferences.getString("appearance", null) } ?: AppAppearance.AUTO
+        set(value) { preferences.edit().putString("appearance", value.name).apply() }
+
+    override var contributionsOptedOut: Boolean
+        get() = preferences.getBoolean("contributions_opted_out", false)
+        set(value) { check(preferences.edit().putBoolean("contributions_opted_out", value).commit()) }
+
+    override var contributorDisplayName: String?
+        get() = preferences.getString("contributor_display_name", null)
+        set(value) { preferences.edit().putString("contributor_display_name", value).apply() }
 
     override var visibleSubjectOrder: List<String>
         get() = readArray(SUBJECTS) { getString(it) }

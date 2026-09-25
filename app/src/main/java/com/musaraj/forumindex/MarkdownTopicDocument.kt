@@ -16,8 +16,9 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
     companion object {
         fun parse(markdown: String, baseUrl: URL, postIdOffset: Int = 0): MarkdownTopicDocument {
             val lines = markdown.replace("\r\n", "\n").split('\n')
+            val hasEnvelope = isEnvelope(lines)
             val footer = mutableSetOf<Int>()
-            if (isEnvelope(lines)) {
+            if (hasEnvelope) {
                 for (index in lines.indices.reversed()) {
                     if (lines[index].isBlank()) continue
                     if (!navigation.matches(lines[index])) break
@@ -67,6 +68,17 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
                     index++
                     continue
                 }
+                val legacy = if (fence == null && hasEnvelope) legacyMetadata.matchEntire(line) else null
+                val legacyDate = legacy?.groupValues?.get(2)?.let { try { Instant.parse(it) } catch (_: Exception) { null } }
+                if (legacy != null && legacyDate != null) {
+                    appendPost(beforeMetadata = true)
+                    author = legacy.groupValues[1].replace("\\_", "_")
+                    avatar = null
+                    date = legacyDate
+                    hasMetadata = true
+                    index++
+                    continue
+                }
                 if (fence == null && line in metadataStarts) {
                     val end = (index + 1 until lines.size).firstOrNull { lines[it] == "</div>" }
                     val metadata = end?.let { lines.subList(index + 1, it) }
@@ -87,16 +99,17 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
                 index++
             }
             appendPost(beforeMetadata = false)
-            val title = if (isEnvelope(lines)) lines.first().removePrefix("# ").trim().takeIf { it.isNotEmpty() } else null
+            val title = if (hasEnvelope) lines.first().removePrefix("# ").trim().takeIf { it.isNotEmpty() } else null
             return MarkdownTopicDocument(posts, next, title)
         }
 
+        private val legacyMetadata = Regex("""^## Post [0-9]+ by @([^\s]+) — ([0-9]{4}-[^\s]+)$""")
         private val navigation = Regex("""^\[(Next|Previous) page\]\(([^\s)]+)\)$""")
         private val username = Regex("""\[@((?:\\.|[^\]])+)\]\(""")
         private val avatarPattern = Regex("""!\[[^\]]*\]\(([^\s)]+)\)""")
         private val datePattern = Regex("\"([0-9]{4}-[^\"\\s]+)\"")
         private val metadataStarts = setOf("<div class=\"post-metadata\">", "<div class='post-metadata'>")
-        private val fields = listOf("**URL:**", "**Category:**", "**Tags:**", "**Created:**", "**Posts on this page:**", "**Page:**", "**Showing post:**")
+        private val fields = listOf("**URL:**", "**Category:**", "**Tags:**", "**Created:**", "**Posts:**", "**Posts on this page:**", "**Page:**", "**Showing post:**")
 
         private fun isEnvelope(lines: List<String>) = lines.firstOrNull()?.startsWith("# ") == true &&
             lines.drop(1).firstOrNull { it.isNotEmpty() }?.startsWith("**URL:**") == true

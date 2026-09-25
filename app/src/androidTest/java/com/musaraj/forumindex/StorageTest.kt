@@ -27,6 +27,17 @@ class StorageTest {
         tokens.delete()
     }
 
+    @Test fun appearanceAndContributionChoicesSurviveNewStore() {
+        assertEquals(AppAppearance.AUTO, preferences.appearance)
+        preferences.appearance = AppAppearance.DARK
+        preferences.contributionsOptedOut = true
+        preferences.contributorDisplayName = "Reader-12345678"
+        val restored = ForumIndexPreferences(context)
+        assertEquals(AppAppearance.DARK, restored.appearance)
+        assertTrue(restored.contributionsOptedOut)
+        assertEquals("Reader-12345678", restored.contributorDisplayName)
+    }
+
     @Test fun preferencesRoundTripUserOwnedCollectionsAndDeviceName() {
         val stars = listOf(
             StarredTopic("Title \"one\"", "https://forum.test/t/1", "Forum", 11, forumId = 3),

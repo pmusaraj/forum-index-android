@@ -12,7 +12,7 @@ For feature work and before releases:
 
 1. Review iOS commits since the last recorded comparison, including API models and tests, not just screenshots or commit titles. Pin the reviewed commit.
 2. Compare actual behavior with Android. Track additions, regressions, and intentional platform differences in [parity-checklist.md](parity-checklist.md).
-3. Implement the relevant behavior with Android lifecycle/cancellation handling and tests. Preserve API contracts, composite forum/topic identity, contribution opt-in, local stars, and existing navigation state.
+3. Implement the relevant behavior with Android lifecycle/cancellation handling and tests. Preserve API contracts, composite forum/topic identity, persistent contribution opt-out, local stars, and existing navigation state.
 4. Validate equivalent scenarios on a device/emulator and record what was tested and what remains unverified. Shared fixtures should exercise the same contract; platform-specific UI tests need not use identical gestures.
 5. Update this document's comparison baseline and checklist. Do not describe an untested or partial implementation as complete parity.
 
@@ -56,4 +56,28 @@ Matched iOS [52298db736](https://github.com/pmusaraj/forum-index-app/commit/5229
 - Bookmarks for linked URLs have no Forum Index topic ID. They persist locally and do not send read/star contribution actions for the source topic or guess an API ID from a forum URL. Existing ID-based bookmarks remain compatible.
 - Other origins (including subdomains or different ports) still open externally. HTTP and unsupported URL schemes remain rejected.
 
-The separate forum-overview popover introduced in iOS `d1442e60d5` is not included in this internal-link change and remains a tracked parity gap. Linked preview history currently belongs to a retained topic page; activity recreation or paging far enough to dispose that page resets the history.
+The forum-overview popover introduced in iOS `d1442e60d5` was subsequently ported in the evening comparison below. Linked preview history currently belongs to a retained topic page; activity recreation or paging far enough to dispose that page resets the history.
+
+## September 24 evening comparison
+
+Reviewed iOS through [800c5bd](https://github.com/pmusaraj/forum-index-app/commit/800c5bd), including `deea313`, `a24986f`, `846abe7`, `d8dd68b`, and `cbec412`.
+
+- Settings now offer persisted Auto/Light/Dark appearance, with matching reader, sheets, Markdown, controls, and native window colors. Auto follows Android system appearance; native content is independent of website header contrast.
+- Feed rows use leading 36 dp forum icons, compact reply counts with a speech bubble, consistent spacing, separators, and matching loading placeholders.
+- The forum name in the Markdown header opens site information, with a public forum-detail request, description, browser links, loading/error/retry, and HTTPS validation.
+- Full web topics sample the visible site's header background and adjust the top inset and status-bar contrast. Web content extends to the bottom edge; floating actions remain above navigation controls. Sampling is cancelled for hidden/disposed pages and never exposes a JavaScript-to-native bridge. Android samples while visible rather than installing the iOS mutation observer.
+- Contributions enroll automatically with a persistent generated Reader name and detected/editable device name. Explicit opt-out persists across launches, preserves local stars, and can be reversed in Settings. Existing credentials are reused. Enrollment failure retains access to the public feed.
+- Settings use the updated contribution disclosure, larger action buttons, and “Recommend a forum” section. Android verification behavior is unchanged, as requested.
+- Markdown uses theme-aware code backgrounds, smaller code text, subtle rules, `@username` labels, and legacy post headings inside recognized generated envelopes. Ordinary Markdown and fenced examples remain intact.
+
+App Store bundle identifiers, build numbers, TestFlight releases, screenshot tooling, and iOS verification are platform-specific and excluded. The earlier rendering and physical-device limitations still apply.
+
+Validation: 76 JVM tests and 42 Android 15 emulator tests passed; debug/release APK assembly and release lint passed. See the evening validation in [parity-checklist.md](parity-checklist.md).
+
+## September 25 subject defaults
+
+Matched iOS [8abf4cd](https://github.com/pmusaraj/forum-index-app/commit/8abf4cd). Default tabs now follow Main, AI, Tech, Creative, Markets, Open Source, Jobs, Gaming, Audio, Community, Web Development, Sport, Lifestyle, and Science, when available in the eligible taxonomy. Saved subject selections and ordering remain authoritative. Technology and Web Development labels are selected by slug, matching iOS.
+
+Also reviewed the adjacent working-tree changes: the iPad subject-picker popover sizing fix has no direct Android equivalent because the Android picker already uses a height-constrained modal bottom sheet. iOS screenshot fixtures/export tooling and TestFlight build metadata remain platform-specific. Verification remains excluded.
+
+Validation: `testDebugUnitTest` passed (76 tests); `assembleDebug` passed. The existing cold-launch test now covers the expanded ordering and taxonomy filtering, and saved-selection coverage still passes. Emulator tests were not rerun for this default-list and label change.

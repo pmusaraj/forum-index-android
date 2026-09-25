@@ -5,6 +5,8 @@ import android.net.Uri
 import android.text.Spanned
 import android.widget.TextView
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -39,8 +41,9 @@ import java.net.URL
 internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boolean = { false }): Markwon {
     val context = LocalContext.current
     val resources = LocalResources.current
+    val colors = MaterialTheme.colorScheme
     val handleInternalLink by rememberUpdatedState(onInternalLink)
-    return remember(context, resources, baseUrl) {
+    return remember(context, resources, baseUrl, colors) {
         Markwon.builder(context)
             .usePlugin(TablePlugin.create(context))
             .usePlugin(StrikethroughPlugin.create())
@@ -59,9 +62,12 @@ internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boo
                     })
                 }
                 override fun configureTheme(builder: MarkwonTheme.Builder) {
-                    builder.linkColor(0xFF008C95.toInt())
-                        .blockQuoteColor(0xFF008C95.toInt())
-                        .codeBackgroundColor(0xFFF0EBE2.toInt())
+                    builder.linkColor(colors.primary.toArgb())
+                        .blockQuoteColor(colors.primary.toArgb())
+                        .codeBackgroundColor(colors.surfaceVariant.toArgb())
+                        .codeTextSize(android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 16 * .85f, resources.displayMetrics).toInt())
+                        .thematicBreakColor(colors.outlineVariant.copy(alpha = .5f).toArgb())
+                        .thematicBreakHeight(1)
                 }
             })
             .build()
@@ -71,6 +77,7 @@ internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boo
 /** Native, selectable Android text: no HTML WebView is used for the preview. */
 @Composable
 internal fun MarkdownPostBody(markdown: String, renderer: Markwon, onRendered: () -> Unit = {}) {
+    val colors = MaterialTheme.colorScheme
     val renderedCallback by rememberUpdatedState(onRendered)
     val rendered by produceState<Spanned?>(null, markdown, renderer) {
         value = withContext(Dispatchers.Default) { renderer.toMarkdown(markdown) }
@@ -79,13 +86,15 @@ internal fun MarkdownPostBody(markdown: String, renderer: Markwon, onRendered: (
         modifier = Modifier.fillMaxWidth(),
         factory = { context -> TextView(context).apply {
             textSize = 16f
-            setTextColor(0xFF202020.toInt())
-            setLinkTextColor(0xFF008C95.toInt())
+            setTextColor(colors.onSurface.toArgb())
+            setLinkTextColor(colors.primary.toArgb())
             setTextIsSelectable(true)
             movementMethod = TableAwareMovementMethod.create()
             setLineSpacing(0f, 1.15f)
         } },
         update = { view ->
+            view.setTextColor(colors.onSurface.toArgb())
+            view.setLinkTextColor(colors.primary.toArgb())
             rendered?.let {
                 if (view.tag !== it) {
                     renderer.setParsedMarkdown(view, it)

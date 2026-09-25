@@ -27,15 +27,19 @@ class ForumIndexViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test fun coldLaunchFiltersAndUsesDefaultTypedDestinationOrder() = runTest(dispatcher.scheduler) {
-        val api = FakeApi(subjects = listOf(subject("sport"), subject("tiny", 4), subject("main"), subject("ai")))
+        val subjects = listOf("sport", "main", "science", "web-dev", "community", "audio", "gaming", "jobs",
+            "opensource", "markets", "creative", "technology", "ai", "lifestyle").map { subject(it) }
+        val api = FakeApi(subjects = subjects + subject("tiny", 4))
         val vm = viewModel(api)
         vm.launch(); advanceUntilIdle()
 
-        assertEquals(listOf("main-feed", "parent:ai", "parent:sport"), vm.uiState.value.visibleDestinations.map { it.id })
+        assertEquals(listOf("main-feed", "parent:ai", "parent:technology", "parent:creative", "parent:markets",
+            "parent:opensource", "parent:jobs", "parent:gaming", "parent:audio", "parent:community", "parent:web-dev",
+            "parent:sport", "parent:lifestyle", "parent:science"), vm.uiState.value.visibleDestinations.map { it.id })
         assertEquals("main-feed", vm.uiState.value.selectedDestination?.id)
-        assertEquals(listOf("main-feed", "parent:sport", "parent:main", "parent:ai"), vm.uiState.value.allDestinations.map { it.id })
+        assertEquals(listOf("main-feed") + subjects.map { "parent:${it.slug}" }, vm.uiState.value.allDestinations.map { it.id })
         assertNotEquals(vm.uiState.value.allDestinations[0].id, vm.uiState.value.allDestinations.first { it is Destination.Subject && it.subject.slug == "main" }.id)
-        assertEquals(listOf("sport", "main", "ai"), (vm.uiState.value.taxonomy as TaxonomyState.Loaded).subjects.map { it.slug })
+        assertEquals(subjects, (vm.uiState.value.taxonomy as TaxonomyState.Loaded).subjects)
         assertEquals(listOf("main:1", "subject:ai:1"), api.calls)
     }
 
@@ -542,6 +546,55 @@ class ForumIndexViewModelTest {
         assertNull(vm.feedReturnTarget.value)
     }
 
+    @Test fun automaticEnrollmentWaitsForStorageAndUsesStableGeneratedIdentity() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val prefs = MemoryPreferences(deviceNameOverride = "My tablet")
+        val tokens = MemoryTokenStore()
+        val vm = viewModel(api, prefs, tokens)
+        vm.launch("Detected phone")
+        vm.launch("Detected phone")
+        advanceUntilIdle()
+        val name = prefs.contributorDisplayName!!
+        assertTrue(name.startsWith("Reader-"))
+        assertEquals(listOf("create:$name:My tablet"), api.calls.filter { it.startsWith("create:") })
+        assertNotNull(vm.uiState.value.contribution.enrollment)
+        assertEquals(name, vm.defaultDisplayName)
+        val restored = viewModel(api, prefs, tokens)
+        restored.launch("Detected phone")
+        advanceUntilIdle()
+        assertEquals(1, api.calls.count { it.startsWith("create:") })
+    }
+
+    @Test fun optOutPersistsAcrossLaunchAndManualEnrollmentReenablesContributions() = runTest(dispatcher.scheduler) {
+        val api = FakeApi(deleteFailure = true)
+        val prefs = MemoryPreferences(stars = listOf(star(1)))
+        val tokens = MemoryTokenStore(enrollment())
+        val vm = viewModel(api, prefs, tokens)
+        vm.launch("Phone"); advanceUntilIdle()
+        vm.optOut(); advanceUntilIdle()
+        assertTrue(prefs.contributionsOptedOut)
+        assertEquals(listOf(star(1)), prefs.stars)
+        val restored = viewModel(api, prefs, tokens)
+        restored.launch("Phone"); advanceUntilIdle()
+        assertNull(restored.uiState.value.contribution.enrollment)
+        assertFalse(api.calls.any { it.startsWith("create:") })
+        restored.enroll(restored.defaultDisplayName, "Phone"); advanceUntilIdle()
+        assertFalse(prefs.contributionsOptedOut)
+        assertNotNull(restored.uiState.value.contribution.enrollment)
+    }
+
+    @Test fun automaticEnrollmentFailureLeavesPublicFeedUsableWithoutRetryLoop() = runTest(dispatcher.scheduler) {
+        val api = FakeApi(createFailure = true)
+        val prefs = MemoryPreferences()
+        val vm = viewModel(api, prefs)
+        vm.launch("Phone"); advanceUntilIdle()
+        assertNotNull(vm.uiState.value.contribution.error)
+        assertNull(vm.uiState.value.contribution.enrollment)
+        assertTrue(vm.uiState.value.feeds[Destination.Main.id] is FeedState.Loaded)
+        vm.launch("Phone"); advanceUntilIdle()
+        assertEquals(1, api.calls.count { it.startsWith("create:") })
+    }
+
     private suspend fun TestScope.completeNext(runner: ControlledRunner, value: Any? = ControlledRunner.RUN_CALL) {
         runCurrent()
         assertTrue("expected a pending blocking call", runner.pendingCount > 0)
@@ -572,6 +625,8 @@ class ForumIndexViewModelTest {
         override var openedTopicIds: Set<String> = emptySet(),
         override var deviceNameOverride: String? = null,
     ) : PreferencesStore {
+        override var contributionsOptedOut = false
+        override var contributorDisplayName: String? = null
         override fun markOpened(forumId: Int, topicId: Int) { openedTopicIds += "$forumId:$topicId" }
         override fun isOpened(forumId: Int, topicId: Int) = "$forumId:$topicId" in openedTopicIds
     }

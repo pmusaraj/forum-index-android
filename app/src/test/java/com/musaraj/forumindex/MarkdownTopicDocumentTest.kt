@@ -8,6 +8,39 @@ import java.time.Instant
 class MarkdownTopicDocumentTest {
     private val base = URL("https://example.com/t/topic/123")
 
+    @Test fun legacyEnvelopesSplitAuthorsAndPreserveFencedExamples() {
+        val document = MarkdownTopicDocument.parse("""
+            # Legacy
+            **URL:** $base
+            **Posts:** 2
+
+            ## Post 1 by @alice\_smith — 2026-09-24T12:00:00Z
+
+            First post.
+
+            ---
+
+            ## Post 2 by @bob — 2026-09-24T13:00:00Z
+
+            ```markdown
+            ## Post 3 by @example — 2026-09-24T14:00:00Z
+            ```
+
+            [Next page](/t/topic/123?page=2)
+        """.trimIndent(), base)
+        assertEquals(2, document.posts.size)
+        assertEquals("alice_smith", document.posts[0].username)
+        assertEquals("First post.", document.posts[0].markdown)
+        assertEquals("bob", document.posts[1].username)
+        assertTrue(document.posts[1].markdown.contains("## Post 3 by @example"))
+        assertEquals(Instant.parse("2026-09-24T13:00:00Z"), document.posts[1].publishedAt)
+        assertEquals("https://example.com/t/topic/123?page=2", document.nextPageUrl.toString())
+        val ordinary = "## Post 1 by @alice — 2026-09-24T12:00:00Z"
+        assertEquals(ordinary, MarkdownTopicDocument.parse(ordinary, base).posts.single().markdown)
+        val invalid = "# Example\n**URL:** $base\n\n## Post 1 by @alice — 2026-invalid"
+        assertNull(MarkdownTopicDocument.parse(invalid, base).posts.single().username)
+    }
+
     @Test fun generatedEnvelopeBecomesPostsAndForwardNavigation() {
         val document = MarkdownTopicDocument.parse("""
             # Topic

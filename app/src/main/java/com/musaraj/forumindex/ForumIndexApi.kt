@@ -37,6 +37,8 @@ data class ForumSummary(
     val iconUrl: URL?,
     val supportsMarkdown: Boolean = false,
 )
+data class ForumDetail(val forum: ForumSummary, val description: String?, val siteUrl: URL?, val organizationUrl: URL?)
+
 data class FeedEnvelope(val count: Int, val results: List<Topic>)
 data class Installation(
     val publicId: String,
@@ -94,6 +96,12 @@ class HttpForumIndexApi(
     internal fun subjectTopicsUrl(slug: String, page: Int): URL {
         require(page > 0) { "page must be positive" }
         return url("/api/v2/subjects/${encodeSlug(slug)}/topics", "feed=trending&limit=30&page=$page&language=en")
+    }
+
+    fun fetchForum(id: Int): ForumDetail {
+        require(id > 0)
+        val body = request(url("/api/v2/forums/$id"), "GET")
+        return decode { ForumIndexJson.forumDetail(body) }
     }
 
     override fun fetchTaxonomy(): NavigationEnvelope {
@@ -263,6 +271,14 @@ internal object ForumIndexJson {
         val root = JSONObject(json)
         val values = root.getJSONArray("results")
         return FeedEnvelope(root.getInt("count"), List(values.length()) { index -> values.getJSONObject(index).topic() })
+    }
+
+    fun forumDetail(json: String): ForumDetail {
+        val value = JSONObject(json).getJSONObject("forum")
+        val forum = value.forum()
+        return ForumDetail(forum, value.optStringOrNull("description"),
+            acceptedUrl(value.optStringOrNull("site_url")) ?: forum.baseUrl,
+            acceptedUrl(value.optStringOrNull("parent_site_url")))
     }
 
     fun enrollment(json: String): Enrollment {

@@ -1,6 +1,13 @@
 package com.musaraj.forumindex
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -37,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
@@ -57,8 +66,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-private val TopicBackground = Color(0xFFFAF6EE)
-private val TopicSurface = Color(0xFFF0EBE2)
+private val TopicBackground: Color @Composable get() = MaterialTheme.colorScheme.background
+private val TopicSurface: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
 
 @Composable
 internal fun TopicDetailScreen(
@@ -107,6 +116,7 @@ private fun TopicDetailPage(
     val page = pages.last()
     val reader = page.reader
     val state by key(page.id) { reader.state.collectAsState() }
+    var showsOverview by rememberSaveable { mutableStateOf(false) }
     var usesWeb by rememberSaveable(url.toString()) { mutableStateOf(!topic.forum.supportsMarkdown) }
     var fullPageReady by remember(page.id) { mutableStateOf(false) }
     val scope = key(page.id) { rememberCoroutineScope() }
@@ -127,7 +137,7 @@ private fun TopicDetailPage(
         }
     }
     Box(Modifier.fillMaxSize().background(TopicBackground)) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().then(if (topic.forum.supportsMarkdown) Modifier.background(TopicSurface).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)) else Modifier)) {
             if (topic.forum.supportsMarkdown) {
                 Row(
                     Modifier.fillMaxWidth().background(TopicSurface).padding(horizontal = 16.dp).testTag("topic-forum-header"),
@@ -136,9 +146,13 @@ private fun TopicDetailPage(
                     if (history.canGoBack) TextButton(onClick = goBack, modifier = Modifier.testTag("topic-header-back")) {
                         Text("Back")
                     }
-                    ForumIcon(topic.forum)
-                    Spacer(Modifier.width(8.dp))
-                    Text(topic.forum.name, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, maxLines = 1, fontSize = 14.sp)
+                    Row(Modifier.weight(1f).clickable { showsOverview = true }.padding(vertical = 14.dp)
+                        .testTag("topic-header-forum-overview").semantics { contentDescription = "${topic.forum.name}, site information" },
+                        verticalAlignment = Alignment.CenterVertically) {
+                        ForumIcon(topic.forum)
+                        Spacer(Modifier.width(8.dp))
+                        Text(topic.forum.name, fontWeight = FontWeight.SemiBold, maxLines = 1, fontSize = 14.sp)
+                    }
                     TextButton(
                         onClick = { usesWeb = !usesWeb },
                         modifier = Modifier.testTag("topic-view-toggle").semantics {
@@ -177,10 +191,17 @@ private fun TopicDetailPage(
                 }
                 // Every linked page gets its own requested URL, including a post suffix, query, or fragment.
                 key(page.id) {
-                    if (usesWeb || state.loaded) webContent(page.url, usesWeb && active) { fullPageReady = it }
+                    // AndroidView still participates in Compose hit testing when its native
+                    // view is invisible. Put the preloader below the active scroll surface.
+                    Box(Modifier.fillMaxSize().zIndex(if (usesWeb) 1f else -1f)) {
+                        CompositionLocalProvider(LocalMatchWebHeader provides !topic.forum.supportsMarkdown) {
+                            if (usesWeb || state.loaded) webContent(page.url, usesWeb && active) { fullPageReady = it }
+                        }
+                    }
                 }
             }
         }
+        if (showsOverview && active) ForumOverview(topic.forum.id, onDismiss = { showsOverview = false })
         if (active) TopicActions(bookmark, isStarred(bookmark), { onToggleStar(bookmark) }, onDismiss, Modifier.align(Alignment.BottomEnd))
     }
 }
@@ -222,12 +243,12 @@ private fun TopicArticle(
                 val date = publishedAt?.let { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault()).format(it) }
                 val details = listOfNotNull(date, replyCount?.let { "$it ${if (it == 1) "reply" else "replies"}" })
                 if (details.isNotEmpty()) Text(details.joinToString(" · "),
-                    fontSize = 13.sp, color = Color.DarkGray, modifier = Modifier.testTag("topic-preview-details"))
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("topic-preview-details"))
             }
         }
         items(state.posts, key = { it.id }) { post ->
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                HorizontalDivider()
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
                 if (post.username != null) PostAuthor(post)
                 MarkdownPostBody(post.markdown, renderer) { renderedPosts[post.id] = true }
             }
@@ -251,9 +272,9 @@ private fun PostAuthor(post: MarkdownPost) {
     Row(Modifier.fillMaxWidth().testTag("post-author-${post.id}"), verticalAlignment = Alignment.CenterVertically) {
         ForumIcon(ForumSummary(0, post.username.orEmpty(), "", null, post.avatarUrl))
         Spacer(Modifier.width(8.dp))
-        Text(post.username.orEmpty(), Modifier.weight(1f), fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text("@${post.username.orEmpty()}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, maxLines = 1)
         post.publishedAt?.let { date ->
-            Text(relativePostDate(date, now), fontSize = 12.sp, color = Color.DarkGray,
+            Text(relativePostDate(date, now), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.semantics { contentDescription = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.FULL, FormatStyle.SHORT)
                     .withZone(ZoneId.systemDefault()).format(date) })
         }

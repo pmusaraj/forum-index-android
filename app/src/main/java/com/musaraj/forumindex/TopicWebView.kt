@@ -7,6 +7,8 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.view.View
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.webkit.SafeBrowsingResponse
 import android.webkit.SslErrorHandler
@@ -26,9 +28,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import android.app.Activity
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +65,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.net.URL
+import kotlin.math.abs
 
 internal enum class TopicNavigation { IN_WEBVIEW, EXTERNAL, REJECT }
 
@@ -100,15 +114,55 @@ internal fun TopicWebPage(
     testHtml: String? = null,
     onReady: (Boolean) -> Unit = {},
 ) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val matchHeader = LocalMatchWebHeader.current
+    val fallback = MaterialTheme.colorScheme.background
+    var headerColor by remember(initial) { mutableStateOf<Color?>(null) }
+    val chrome = if (matchHeader) headerColor ?: fallback else MaterialTheme.colorScheme.surfaceVariant
+    val context = LocalContext.current
+    val activity = context.activity()
+    val dark = fallback.luminance() < .5f
+    val webContext = remember(context, dark) {
+        android.view.ContextThemeWrapper(context, if (dark) R.style.Theme_ForumIndex_Dark else R.style.Theme_ForumIndex)
+    }
+    LaunchedEffect(visible, chrome) {
+        if (visible && activity != null) {
+            WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightStatusBars = chrome.luminance() > .5f
+        }
+    }
+    DisposableEffect(visible, activity) {
+        onDispose {
+            if (visible && activity != null) WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                .isAppearanceLightStatusBars = fallback.luminance() > .5f
+        }
+    }
     var loading by remember(initial) { mutableStateOf(true) }
     var failed by remember(initial) { mutableStateOf(false) }
     var webView by remember(initial) { mutableStateOf<WebView?>(null) }
+    // Sample only the displayed document. No JavaScript bridge or app data is exposed to the page.
+    LaunchedEffect(webView, initial, visible, loading, failed, matchHeader, lifecycle) {
+        if (!visible || !matchHeader || loading || failed) { headerColor = null; return@LaunchedEffect }
+        val view = webView ?: return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            var live = true
+            try {
+                while (true) {
+                    view.evaluateJavascript(HEADER_COLOR_SCRIPT) { result ->
+                        if (live) headerColor = parseWebHeaderColor(result)
+                    }
+                    kotlinx.coroutines.delay(750)
+                }
+            } finally { live = false }
+        }
+    }
     LaunchedEffect(loading, failed) { onReady(!loading && !failed) }
-    Box(modifier.fillMaxSize().then(if (visible) Modifier else Modifier.clearAndSetSemantics { })) {
+    Box(modifier.fillMaxSize().background(chrome)
+        .then(if (matchHeader) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)) else Modifier)
+        .then(if (visible) Modifier else Modifier.clearAndSetSemantics { })) {
         AndroidView(
             modifier = Modifier.fillMaxSize().testTag("topic-webview"),
-            factory = { context ->
-                secureWebView(context, initial, { loading = it }, { failed = true }).also { view ->
+            factory = { _ ->
+                secureWebView(webContext, initial, { loading = it }, { failed = true }).also { view ->
                     webView = view
                     if (testHtml == null) view.loadUrl(initial.toString())
                     else view.loadDataWithBaseURL(initial.toString(), testHtml, "text/html", "UTF-8", null)
@@ -167,7 +221,7 @@ internal fun TopicActions(topic: StarredTopic, starred: Boolean, onToggleStar: (
 private fun TopicControl(label: String, glyph: String, onClick: () -> Unit) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(48.dp).shadow(4.dp, CircleShape).background(Color.White.copy(alpha = .94f), CircleShape)
+        modifier = Modifier.size(48.dp).shadow(4.dp, CircleShape).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .94f), CircleShape)
             .semantics { contentDescription = label },
     ) { Text(glyph, fontSize = 24.sp) }
 }
@@ -178,8 +232,9 @@ private fun secureWebView(
     initial: URL,
     onLoading: (Boolean) -> Unit,
     onFailure: () -> Unit,
-) = WebView(context).apply {
-    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+) = DirectionLockedWebView(context).apply {
+    // Preserve the browser default beneath pages with transparent bodies; chrome colors apply only to the inset.
+    setBackgroundColor(android.graphics.Color.WHITE)
     settings.javaScriptEnabled = true
     settings.allowFileAccess = false
     settings.allowContentAccess = false
@@ -224,4 +279,74 @@ private fun secureWebView(
     }
 }
 
-private val TopicBackground = Color(0xFFFAF6EE)
+private val TopicBackground: Color @Composable get() = MaterialTheme.colorScheme.background
+
+/** Keep a vertical web scroll in the WebView until the finger lifts, even if it drifts sideways. */
+private class DirectionLockedWebView(context: android.content.Context) : WebView(context) {
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private var downX = 0f
+    private var downY = 0f
+    private var horizontal: Boolean? = null
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.x
+                downY = event.y
+                horizontal = null
+            }
+            MotionEvent.ACTION_MOVE -> if (horizontal == null) {
+                val dx = abs(event.x - downX)
+                val dy = abs(event.y - downY)
+                if (maxOf(dx, dy) > touchSlop) horizontal = dx > dy * 1.5f
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> horizontal = false // Keep pinch gestures in web content.
+        }
+        val finished = event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL
+        val keepTouch = !finished && horizontal != true
+        parent?.requestDisallowInterceptTouchEvent(keepTouch)
+        val handled = super.dispatchTouchEvent(event)
+        // WebView can update interception itself; retain our direction lock for this gesture.
+        parent?.requestDisallowInterceptTouchEvent(keepTouch)
+        return handled
+    }
+}
+
+internal val LocalMatchWebHeader = staticCompositionLocalOf { true }
+
+internal fun parseWebHeaderColor(value: String): Color? = try {
+    val components = org.json.JSONArray(value)
+    if (components.length() != 4 || components.getInt(3) != 255) null
+    else {
+        val rgb = (0..2).map { components.getInt(it) }
+        if (rgb.any { it !in 0..255 }) null else Color(rgb[0], rgb[1], rgb[2])
+    }
+} catch (_: Exception) { null }
+
+private const val HEADER_COLOR_SCRIPT = """
+(() => {
+    const header = Array.from(document.querySelectorAll(".d-header, header, [role='banner'], #header"))
+        .find(element => {
+            const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
+            return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+        });
+    if (!header) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return null;
+    const ancestors = [];
+    for (let element = header; element; element = element.parentElement) ancestors.push(element);
+    for (const element of ancestors.reverse()) {
+        context.fillStyle = getComputedStyle(element).backgroundColor;
+        context.fillRect(0, 0, 1, 1);
+    }
+    return Array.from(context.getImageData(0, 0, 1, 1).data);
+})();
+"""
+
+private tailrec fun android.content.Context.activity(): Activity? = when (this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.activity()
+    else -> null
+}

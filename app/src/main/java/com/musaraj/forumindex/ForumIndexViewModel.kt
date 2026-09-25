@@ -131,9 +131,24 @@ class ForumIndexViewModel(
 
     init { reloadEnrollment() }
 
-    fun launch() {
+    private var automaticEnrollmentDevice: String? = null
+    val defaultDisplayName: String
+        get() = preferences.contributorDisplayName ?: "Reader-${java.util.UUID.randomUUID().toString().take(8)}".also {
+            preferences.contributorDisplayName = it
+        }
+
+    private fun enrollAutomaticallyIfNeeded() {
+        val device = automaticEnrollmentDevice ?: return
+        val state = mutableUiState.value.contribution
+        if (preferences.contributionsOptedOut || state.loading || state.error != null || state.enrollment != null) return
+        enroll(defaultDisplayName, preferences.deviceNameOverride ?: device)
+    }
+
+    fun launch(defaultDeviceName: String? = null) {
         if (launched) return
         launched = true
+        automaticEnrollmentDevice = defaultDeviceName
+        enrollAutomaticallyIfNeeded()
         loadTaxonomy()
     }
 
@@ -333,9 +348,10 @@ class ForumIndexViewModel(
         contributionLoading()
         viewModelScope.launch {
             try {
-                val enrollment = calls.run(tokenStore::load)
+                val enrollment = if (preferences.contributionsOptedOut) null else calls.run(tokenStore::load)
                 if (generation == contributionGeneration) {
                     contributionSuccess(enrollment)
+                    enrollAutomaticallyIfNeeded()
                     loadSelectedFeedIfReady()
                 }
             } catch (_: CancellationException) {
@@ -362,12 +378,18 @@ class ForumIndexViewModel(
                 calls.run { tokenStore.save(enrollment) }
                 if (generation != contributionGeneration || currentToken() != null) return@launch
                 preferences.deviceNameOverride = device
+                preferences.contributorDisplayName = display
+                preferences.contributionsOptedOut = false
                 contributionSuccess(enrollment)
                 reloadMainFeed()
+                if (mutableUiState.value.selectedDestination != Destination.Main) loadSelectedFeedIfReady()
             } catch (_: CancellationException) {
                 throw CancellationException()
             } catch (_: Exception) {
-                if (generation == contributionGeneration) contributionFailure()
+                if (generation == contributionGeneration) {
+                    contributionFailure()
+                    loadSelectedFeedIfReady()
+                }
             }
         }
         return true
@@ -549,6 +571,7 @@ class ForumIndexViewModel(
         try {
             // ponytail: synchronous delete survives ViewModel cancellation; use a durable worker if measured jank warrants it.
             tokenStore.delete()
+            preferences.contributionsOptedOut = true
         } catch (_: Exception) {
             if (generation == contributionGeneration) contributionFailure()
             return
@@ -671,7 +694,10 @@ class ForumIndexViewModel(
         const val MAX_PAGE = 3
         const val MAX_LABEL_CODE_POINTS = 100
         const val REQUEST_FAILED = "Request failed. Please try again."
-        val DEFAULT_SLUGS = listOf("main", "ai", "technology", "sport", "creative", "markets", "jobs", "gaming", "community")
+        val DEFAULT_SLUGS = listOf(
+            "main", "ai", "technology", "creative", "markets", "opensource", "jobs", "gaming",
+            "audio", "community", "web-dev", "sport", "lifestyle", "science",
+        )
         val ACTIONS = setOf("starred", "read", "low_quality", "inappropriate", "wrong_subject")
     }
 }

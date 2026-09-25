@@ -39,11 +39,11 @@ The ongoing goal is feature and behavior parity with [the iOS app](https://githu
 - [x] Linked bookmarks persist by URL without sending source-topic contribution actions
 - [x] Parse linked-page titles and remove generated “Showing post” metadata
 - [x] Linked loading errors offer Retry and View full page
-- [ ] Forum overview popover from the separate iOS d1442e60d5 change
+- [x] Forum overview dialog from the separate iOS d1442e60d5 change
 
 ## Contributions
 
-- [x] Optional public enrollment and encrypted bearer token
+- [x] Automatic public enrollment, persistent opt-out, and encrypted bearer token
 - [x] Contributor status and editable device name
 - [x] Read/star/report action submission while enabled
 - [x] Confirmed opt-out preserving local stars
@@ -74,3 +74,36 @@ The ongoing goal is feature and behavior parity with [the iOS app](https://githu
 - 71 JVM tests and 35 Android 15 emulator tests passed.
 - Rendered-link navigation, exact linked URL/bookmark targeting, parent scroll restoration without refetch, linked-page error/retry, system Back, and mixed old/new bookmark persistence are covered.
 - Release APK assembly passed; release lint reports 0 errors and the same 26 existing warnings.
+
+## Touch scrolling regression validation
+
+- Reproduced blocked preview scrolling with the real hidden WebView and unintended topic changes during a vertical web drag before the fix.
+- Keep the preloaded WebView below the preview for hit testing; lock vertical WebView gestures until the finger lifts, requiring a clearly horizontal initial drag for topic paging.
+- 71 JVM tests and 38 Android 15 emulator tests passed. New touch tests cover diagonal feed/preview scrolling, sideways drift during web scrolling, and subsequent intentional horizontal paging.
+- Debug APK rebuilt; release lint reports 0 errors and the same 26 existing warnings. Physical-device gesture feel remains a manual check.
+
+## September 24 evening changes (iOS 800c5bd)
+
+- [x] Persisted Auto/Light/Dark appearance across native screens and Markdown
+- [x] Leading forum icons, compact reply counts, row separators, and matching skeletons
+- [x] Forum overview with public API detail, description, browser links, and retry
+- [x] Website header color and status contrast; full-page content extends to the bottom
+- [x] Generated contributor identity, automatic enrollment, and persistent opt-out
+- [x] Updated Settings layout, contribution disclosure, and forum recommendation section
+- [x] Legacy Markdown post envelopes and @username author labels
+- [x] Preserve Android verification behavior; omit iOS release/verification changes
+
+## Evening validation
+
+- `testDebugUnitTest`: 76 tests passed, including automatic enrollment, persisted opt-out/re-enrollment, enrollment failure fallback, forum detail decoding, and legacy Markdown parsing.
+- `connectedDebugAndroidTest`: 42 tests passed on Pixel 9 / Android 15, including appearance switching, preference persistence, forum overview retry/links, webpage status contrast/reset, settings, and the existing scrolling/paging/internal-link regressions.
+- `assembleDebug`, `assembleRelease`, and `lintRelease`: passed. Lint reports 0 errors and 30 warnings (four new optional KTX-style suggestions). Release APK is unsigned; production signing remains a release task.
+- This pass used deterministic emulator fixtures; physical-device checks, comprehensive visual review, and forum-specific rendering checks remain pending.
+
+## September 25 subject defaults (iOS 8abf4cd)
+
+- [x] Match expanded default subject ordering while retaining saved selections
+- [x] Use slug-based Tech and Web Development display labels
+- [x] Review working-tree iPad sizing and screenshot tooling; retain native Android picker
+
+Validation: `testDebugUnitTest` passed (76 tests); `assembleDebug` passed. The existing cold-launch test now covers the expanded ordering and taxonomy filtering, and saved-selection coverage still passes. Emulator tests were not rerun for this default-list and label change.

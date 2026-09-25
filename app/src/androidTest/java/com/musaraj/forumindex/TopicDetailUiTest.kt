@@ -3,6 +3,7 @@ package com.musaraj.forumindex
 import android.text.Spanned
 import android.text.style.ClickableSpan
 import android.view.View
+import android.webkit.WebView
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.activity.OnBackPressedDispatcher
@@ -16,6 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
@@ -27,6 +30,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import org.junit.Assert.*
@@ -56,7 +60,7 @@ class TopicDetailUiTest {
         val before = compose.onNodeWithTag("post-author-10").fetchSemanticsNode().boundsInRoot.top
         clickMarkdownLink("Open linked reply")
         compose.onNodeWithText("Linked title").assertIsDisplayed()
-        compose.onNodeWithText("bob").assertIsDisplayed()
+        compose.onNodeWithText("@bob").assertIsDisplayed()
         compose.onNodeWithTag("topic-preview-details").assertDoesNotExist()
         compose.onNodeWithTag("fixture-web").assertDoesNotExist()
         compose.onNodeWithContentDescription("Star").performClick()
@@ -135,7 +139,7 @@ class TopicDetailUiTest {
             toggle = { starred = !starred }, dismiss = { closed = true })
         compose.onNodeWithTag("topic-preview-title").assertIsDisplayed()
         compose.onNodeWithTag("topic-forum-header").assertIsDisplayed()
-        compose.onNodeWithText("alice").assertIsDisplayed()
+        compose.onNodeWithText("@alice").assertIsDisplayed()
         compose.onNodeWithTag("topic-view-toggle").performClick()
         compose.onNodeWithTag("fixture-web").assertIsDisplayed()
         compose.onNodeWithTag("topic-forum-header").assertIsDisplayed()
@@ -204,8 +208,61 @@ class TopicDetailUiTest {
         })
         compose.onNodeWithText("Couldn’t load more replies.").assertIsDisplayed()
         compose.onNodeWithText("Retry").performClick()
-        compose.onNodeWithText("bob").assertIsDisplayed()
+        compose.onNodeWithText("@bob").assertIsDisplayed()
         compose.runOnIdle { assertEquals(3, requests) }
+    }
+
+    @Test fun realWebPreloadDoesNotBlockPreviewScrolling() {
+        var selected = 0
+        show(topics = listOf(topic(1), topic(2)),
+            source = { MarkdownPage(document("Scrollable paragraph.\n\n".repeat(100)), it) },
+            realWeb = true, select = { selected = it })
+        compose.waitUntil(5_000) {
+            compose.onNodeWithTag("topic-view-toggle").fetchSemanticsNode()
+                .config[SemanticsProperties.StateDescription] == "Ready"
+        }
+        val preview = compose.onNodeWithTag("topic-markdown-preview")
+        preview.performTouchInput {
+            swipe(Offset(width * .7f, height * .8f), Offset(width * .5f, height * .2f), 600)
+        }
+        assertTrue("A touch drag must scroll the preview", preview.fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value() > 0f)
+        compose.runOnIdle { assertEquals(0, selected) }
+        preview.performTouchInput { swipeLeft() }
+        compose.runOnIdle { assertEquals("Horizontal paging over native text still works", 1, selected) }
+    }
+
+    @Test fun webScrollKeepsItsDirectionUntilFingerLifts() {
+        var selected = 0
+        show(topics = listOf(topic(1), topic(2)),
+            source = { MarkdownPage(document("Body"), it) }, realWeb = true, select = { selected = it })
+        compose.waitUntil(5_000) {
+            compose.onNodeWithTag("topic-view-toggle").fetchSemanticsNode()
+                .config[SemanticsProperties.StateDescription] == "Ready"
+        }
+        compose.onNodeWithTag("topic-view-toggle").performClick()
+        compose.onNodeWithTag("topic-webview").performTouchInput {
+            down(Offset(width * .85f, height * .8f))
+            // Begin vertically, then drift sideways without lifting the finger.
+            moveTo(Offset(width * .85f, height * .6f), 200)
+            moveTo(Offset(width * .15f, height * .4f), 400)
+            up()
+        }
+        compose.runOnIdle { assertEquals("Vertical scroll must not change topics", 0, selected) }
+        fun visibleWeb(view: View?): WebView? {
+            if (view is WebView && view.visibility == View.VISIBLE) return view
+            if (view is ViewGroup) for (i in 0 until view.childCount) {
+                visibleWeb(view.getChildAt(i))?.let { return it }
+            }
+            return null
+        }
+        compose.runOnIdle { assertTrue("Web content must scroll", visibleWeb(nativeRoot)!!.scrollY > 0) }
+        compose.onNodeWithTag("topic-webview").performTouchInput {
+            swipe(Offset(width * .8f, height * .8f), Offset(width * .3f, height * .2f), 600)
+        }
+        compose.runOnIdle { assertEquals("A diagonal vertical scroll must stay on the topic", 0, selected) }
+        compose.onNodeWithTag("topic-detail-pager").performTouchInput { swipeLeft() }
+        compose.runOnIdle { assertEquals("A new horizontal swipe must still change topics", 1, selected) }
     }
 
     private fun show(
@@ -215,6 +272,7 @@ class TopicDetailUiTest {
         toggle: (StarredTopic) -> Unit = {},
         select: (Int) -> Unit = {},
         dismiss: () -> Unit = {},
+        realWeb: Boolean = false,
     ) {
         var session by mutableStateOf(TopicDetailSession.create(topics, topics.first(), "main-feed")!!)
         compose.setContent {
@@ -222,8 +280,15 @@ class TopicDetailUiTest {
             nativeRoot = LocalView.current.rootView
             TopicDetailScreen(session, isStarred, { session = session.selecting(it); select(it) }, toggle, dismiss, source,
                 webContent = { url, visible, ready ->
-                    LaunchedEffect(Unit) { ready(true) }
-                    if (visible) Box(Modifier.fillMaxSize().background(Color.White).testTag("fixture-web")) { Text("Full webpage $url") }
+                    if (realWeb) TopicWebPage(url, visible = visible,
+                        testHtml = "<html><meta name='viewport' content='width=device-width, initial-scale=1'><body>" +
+                            "<p>Scrollable web paragraph</p>".repeat(200) + "</body></html>", onReady = ready)
+                    else {
+                        LaunchedEffect(Unit) { ready(true) }
+                        if (visible) Box(Modifier.fillMaxSize().background(Color.White).testTag("fixture-web")) {
+                            Text("Full webpage $url")
+                        }
+                    }
                 })
         }
         compose.waitForIdle()

@@ -8,6 +8,22 @@ import java.net.URL
 import java.time.Instant
 
 class ForumIndexApiTest {
+    @Test fun forumOverviewUsesPublicEndpointAndRejectsUnsafeLinks() {
+        lateinit var call: FakeConnection
+        val api = HttpForumIndexApi(connectionFactory = { FakeConnection(it, """{"forum":{
+            "id":7,"name":"Forum","slug":"forum","base_url":"https://forum.test",
+            "description":"A forum","site_url":"javascript:bad","parent_site_url":"https://organization.test"
+        }}""").also { value -> call = value } })
+        val detail = api.fetchForum(7)
+        assertEquals("/api/v2/forums/7", call.url.path)
+        assertNull(call.headers["Authorization"])
+        assertEquals("A forum", detail.description)
+        assertEquals("https://forum.test", detail.siteUrl.toString())
+        assertEquals("https://organization.test", detail.organizationUrl.toString())
+        assertThrows(IllegalArgumentException::class.java) { api.fetchForum(0) }
+        assertNull(ForumIndexJson.forumDetail("""{"forum":{"id":7,"name":"Forum","slug":"forum","parent_site_url":"http://unsafe.test"}}""").organizationUrl)
+    }
+
     @Test fun destinationsNeverCollideWithMagicMainSlug() {
         val subject = Subject(1, "Main", "main", "", 0, false, 5)
         assertEquals("main-feed", Destination.Main.id)
