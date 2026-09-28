@@ -28,7 +28,14 @@ data class Topic(
     val forum: ForumSummary,
     val publishedAt: Instant?,
     val replyCount: Int,
+    val externalSignals: List<ExternalSignal> = emptyList(),
 )
+data class ExternalSignal(val source: ExternalSignalSource, val url: URL)
+enum class ExternalSignalSource(val apiValue: String, val displayName: String) {
+    HACKER_NEWS("hacker_news", "Hacker News"),
+    LOBSTERS("lobsters", "Lobsters"),
+}
+
 data class ForumSummary(
     val id: Int,
     val name: String,
@@ -300,7 +307,19 @@ internal object ForumIndexJson {
             getInt("id"), getString("title"), acceptedUrl(optStringOrNull("url")), excerpt,
             getJSONObject("forum").forum(), parseInstant(optStringOrNull("published_at")),
             maxOf(0, engagement?.optInt("replies", 0) ?: 0),
+            externalSignals(),
         )
+    }
+
+    private fun JSONObject.externalSignals(): List<ExternalSignal> {
+        val values = optJSONArray("external_signals") ?: return emptyList()
+        return (0 until values.length()).mapNotNull { index ->
+            val value = values.optJSONObject(index) ?: return@mapNotNull null
+            val source = ExternalSignalSource.entries.firstOrNull { it.apiValue == value.optString("source") }
+                ?: return@mapNotNull null
+            val url = acceptedUrl(value.optStringOrNull("url")) ?: return@mapNotNull null
+            ExternalSignal(source, url)
+        }
     }
 
     private fun JSONObject.forum() = ForumSummary(

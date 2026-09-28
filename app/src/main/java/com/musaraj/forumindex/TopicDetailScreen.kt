@@ -43,6 +43,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
@@ -170,6 +177,7 @@ private fun TopicDetailPage(
                                 title = bookmark.title,
                                 publishedAt = if (page.id == 0) topic.publishedAt else null,
                                 replyCount = if (page.id == 0) topic.replyCount else null,
+                                externalSignals = if (page.id == 0) topic.externalSignals else emptyList(),
                                 state = state, active = active && !usesWeb, reader = reader,
                                 onInternalLink = { destination ->
                                     history.open(destination).also { handled -> if (handled) usesWeb = false }
@@ -211,12 +219,33 @@ private fun TopicArticle(
     title: String,
     publishedAt: Instant?,
     replyCount: Int?,
+    externalSignals: List<ExternalSignal>,
     state: MarkdownReaderState,
     active: Boolean,
     reader: MarkdownTopicReader,
     onInternalLink: (URL) -> Boolean,
 ) {
     val listState = rememberLazyListState()
+    val density = LocalDensity.current.density
+    var titleHeight by remember { mutableStateOf(0) }
+    val visibility = remember(active, reader) { TopicTitleVisibility() }
+    var compactTitle by remember(active, reader) { mutableStateOf(false) }
+    fun titleOffscreen() = titleHeight > 0 && (listState.firstVisibleItemIndex > 0 ||
+        listState.firstVisibleItemScrollOffset > titleHeight + 12 * density)
+    val scrollConnection = remember(visibility, density, titleHeight) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                visibility.scroll(-consumed.y / density, titleOffscreen())
+                compactTitle = visibility.isVisible
+                return Offset.Zero
+            }
+        }
+    }
+    LaunchedEffect(visibility) {
+        snapshotFlow { titleOffscreen() }.collect { offscreen ->
+            if (!offscreen) { visibility.reset(); compactTitle = false }
+        }
+    }
     val renderer = rememberMarkdownRenderer(state.baseUrl, onInternalLink)
     val renderedPosts = remember(reader) { mutableStateMapOf<Int, Boolean>() }
     val scope = rememberCoroutineScope()
@@ -230,36 +259,48 @@ private fun TopicArticle(
                 last.offset + last.size - layout.viewportEndOffset <= layout.viewportEndOffset - layout.viewportStartOffset
         }.distinctUntilChanged().collect { nearEnd -> if (nearEnd) reader.loadNextPage() }
     }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().background(TopicBackground).testTag("topic-markdown-preview"),
-        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 190.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        item(key = "title") {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.semantics { heading() }.testTag("topic-preview-title"))
-                val date = publishedAt?.let { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault()).format(it) }
-                val details = listOfNotNull(date, replyCount?.let { "$it ${if (it == 1) "reply" else "replies"}" })
-                if (details.isNotEmpty()) Text(details.joinToString(" · "),
-                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("topic-preview-details"))
-            }
-        }
-        items(state.posts, key = { it.id }) { post ->
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
-                if (post.username != null) PostAuthor(post)
-                MarkdownPostBody(post.markdown, renderer) { renderedPosts[post.id] = true }
-            }
-        }
-        item(key = "pagination") {
-            when {
-                state.loadingMore -> Text("Loading more replies…", Modifier.testTag("topic-loading-more"))
-                state.loadMoreError != null -> Column {
-                    Text(state.loadMoreError)
-                    Button(onClick = { scope.launch { reader.loadNextPage(retrying = true) } }) { Text("Retry") }
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().background(TopicBackground).nestedScroll(scrollConnection).testTag("topic-markdown-preview"),
+            contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 190.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            item(key = "title") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.onSizeChanged { titleHeight = it.height }.semantics { heading() }.testTag("topic-preview-title"))
+                    val date = publishedAt?.let { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault()).format(it) }
+                    val details = listOfNotNull(date, replyCount?.let { "$it ${if (it == 1) "reply" else "replies"}" })
+                    if (details.isNotEmpty()) Text(details.joinToString(" · "),
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("topic-preview-details"))
+                    if (externalSignals.isNotEmpty()) ExternalSignalLinks(externalSignals)
                 }
+            }
+            items(state.posts, key = { it.id }) { post ->
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+                    if (post.username != null) PostAuthor(post)
+                    MarkdownPostBody(post.markdown, renderer) { renderedPosts[post.id] = true }
+                }
+            }
+            item(key = "pagination") {
+                when {
+                    state.loadingMore -> Text("Loading more replies…", Modifier.testTag("topic-loading-more"))
+                    state.loadMoreError != null -> Column {
+                        Text(state.loadMoreError)
+                        Button(onClick = { scope.launch { reader.loadNextPage(retrying = true) } }) { Text("Retry") }
+                    }
+                }
+            }
+        }
+        if (active && compactTitle) {
+            Column(Modifier.fillMaxWidth().background(TopicBackground).align(Alignment.TopCenter)) {
+                Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                        .semantics { heading() }.testTag("topic-compact-title"))
+                HorizontalDivider()
             }
         }
     }

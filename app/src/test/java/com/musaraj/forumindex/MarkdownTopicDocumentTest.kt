@@ -78,6 +78,35 @@ class MarkdownTopicDocumentTest {
         assertEquals("https://example.com/t/topic/123.md?page=2", document.nextPageUrl.toString())
     }
 
+    @Test fun boldMetadataMatchesHeadingMetadataAndPreservesFencedExamples() {
+        val sampleMarkdown = """
+            # Topic
+            **URL:** $base
+
+            <div class="post-metadata">
+            ### Author: ![Avatar](/avatar.png) [@alice\_smith](/u/alice)
+            #### Post date: [September 20](https://example.com "2026-09-20T19:27:15.434Z")
+            </div>
+
+            A **bold** post.
+
+            ---
+
+            <div class="post-metadata">
+            ### Author: [@bob](/u/bob)
+            </div>
+
+            Reply.
+            [Next page](/t/topic/123?page=2)
+        """.trimIndent()
+        val bold = sampleMarkdown.replace("### Author:", "**Author:**").replace("#### Post date:", "**Post date:**")
+        assertEquals(MarkdownTopicDocument.parse(sampleMarkdown, base), MarkdownTopicDocument.parse(bold, base))
+        val example = "```html\n<div class='post-metadata'>\n**Author:** [@sample](/u/sample)\n</div>\n```"
+        val post = MarkdownTopicDocument.parse(example, base).posts.single()
+        assertNull(post.username)
+        assertEquals(example, post.markdown)
+    }
+
     @Test fun ordinaryMarkdownAndFencedExamplesArePreserved() {
         val markdown = """
             # My heading

@@ -8,6 +8,23 @@ import java.net.URL
 import java.time.Instant
 
 class ForumIndexApiTest {
+    @Test fun externalSignalsAreOptionalAndInvalidEntriesDoNotLoseTopics() {
+        fun decode(field: String) = ForumIndexJson.feed("""{"count":1,"results":[{"id":1,"title":"Topic","forum":{"id":1,"name":"Forum","slug":"forum"}$field}]}""").results.single()
+        listOf("", ",\"external_signals\":null", ",\"external_signals\":{}", ",\"external_signals\":[]").forEach {
+            assertTrue(decode(it).externalSignals.isEmpty())
+        }
+        val topic = decode(""", "external_signals":[
+            {"source":"hacker_news","url":"https://news.ycombinator.com/item?id=123"},
+            {"source":"unknown","url":"https://example.com"},
+            null, 42, {},
+            {"source":"lobsters","url":"http://lobste.rs/s/unsafe"},
+            {"source":"lobsters","url":"https://user:password@lobste.rs/s/unsafe"},
+            {"source":"lobsters","url":"https://lobste.rs/s/valid"}
+        ]""")
+        assertEquals(listOf(ExternalSignalSource.HACKER_NEWS, ExternalSignalSource.LOBSTERS), topic.externalSignals.map { it.source })
+        assertEquals("https://news.ycombinator.com/item?id=123", topic.externalSignals.first().url.toString())
+    }
+
     @Test fun forumOverviewUsesPublicEndpointAndRejectsUnsafeLinks() {
         lateinit var call: FakeConnection
         val api = HttpForumIndexApi(connectionFactory = { FakeConnection(it, """{"forum":{

@@ -82,12 +82,12 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
                 if (fence == null && line in metadataStarts) {
                     val end = (index + 1 until lines.size).firstOrNull { lines[it] == "</div>" }
                     val metadata = end?.let { lines.subList(index + 1, it) }
-                    val authorLine = metadata?.firstOrNull { it.startsWith("### Author:") }
+                    val authorLine = metadata?.firstOrNull { it.startsWith("### Author:") || it.startsWith("**Author:**") }
                     if (end != null && authorLine != null) {
                         appendPost(beforeMetadata = true)
                         author = username.find(authorLine)?.groupValues?.get(1)?.replace("\\_", "_")
                         avatar = avatarPattern.find(authorLine)?.groupValues?.get(1)?.let { resolveTopicUrl(baseUrl, it) }
-                        val timestamp = datePattern.find(metadata.firstOrNull { it.startsWith("#### Post date:") }.orEmpty())
+                        val timestamp = datePattern.find(metadata.firstOrNull { it.startsWith("#### Post date:") || it.startsWith("**Post date:**") }.orEmpty())
                             ?.groupValues?.get(1)
                         date = try { timestamp?.let(Instant::parse) } catch (_: Exception) { null }
                         hasMetadata = true

@@ -107,3 +107,22 @@ The ongoing goal is feature and behavior parity with [the iOS app](https://githu
 - [x] Review working-tree iPad sizing and screenshot tooling; retain native Android picker
 
 Validation: `testDebugUnitTest` passed (76 tests); `assembleDebug` passed. The existing cold-launch test now covers the expanded ordering and taxonomy filtering, and saved-selection coverage still passes. Emulator tests were not rerun for this default-list and label change.
+
+## September 27 recent non-macOS changes (iOS 2b2c00d)
+
+- [x] Bold post metadata, with legacy heading compatibility and fenced-example preservation
+- [x] Compact title reveal on upward scrolling; hide on downward scrolling and at the top
+- [x] Feed About action with excerpt, community details/retry, browser links, and explicit topic opening
+- [x] Optional external discussion signals with tolerant decoding and HTTPS validation
+- [x] Hacker News/Lobsters feed icons, accessibility labels, and root-preview browser links
+- [x] Linked previews omit source-topic discussion signals
+- [x] Starred control accent and accessible state
+- [x] Confirm existing settled-page subject selection; exclude macOS and Apple release work
+
+Validation:
+
+- `testDebugUnitTest`: 80 passed.
+- `assembleDebug`, `assembleDebugAndroidTest`, `assembleRelease`, `lintRelease`: passed; lint reports 0 errors and 30 warnings.
+- Pixel 6 / Android 13: initial full run 42/45 passed; corrected About sheet and bounded title gesture, then 14/14 targeted recent-feature and reader tests passed. All 45 distinct scenarios passed across these runs, including the existing WebView gesture test on rerun.
+- New coverage includes malformed/unknown discussion signals, bold and heading metadata, title direction thresholds/reset, About retry and explicit opening, accessible feed signals, and linked previews omitting source-topic signals.
+- Physical-device/TalkBack and live discussion-link verification were not performed.

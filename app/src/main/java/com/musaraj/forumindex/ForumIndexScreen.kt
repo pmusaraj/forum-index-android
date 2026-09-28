@@ -598,6 +598,7 @@ private fun TopicRow(
     highlighted: Boolean,
 ) {
     var actionsOpen by remember { mutableStateOf(false) }
+    var aboutOpen by remember { mutableStateOf(false) }
     val validUrl = validTopicUrl(topic.url) != null
     Row(
         Modifier.fillMaxWidth()
@@ -609,7 +610,8 @@ private fun TopicRow(
             .testTag("topic-${topic.forum.id}-${topic.id}")
             .padding(16.dp)
             .alpha(if (opened) .75f else 1f)
-            .semantics { contentDescription = "${topic.title}, ${topic.forum.name}, ${topic.replyCount} replies" },
+            .semantics { contentDescription = "${topic.title}, ${topic.forum.name}, ${topic.replyCount} replies" +
+                topic.externalSignals.map { it.source }.distinct().joinToString("") { ", Discussed on ${it.displayName}" } },
     ) {
         ForumIcon(topic.forum, 36.dp)
         Spacer(Modifier.width(16.dp))
@@ -629,9 +631,17 @@ private fun TopicRow(
                 }
                 Text(" ${topic.replyCount}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp,
                     modifier = Modifier.semantics { contentDescription = "${topic.replyCount} ${if (topic.replyCount == 1) "reply" else "replies"}" })
+                topic.externalSignals.map { it.source }.distinct().forEach { source ->
+                    Spacer(Modifier.width(6.dp))
+                    ExternalSignalIcon(source)
+                }
             }
         }
     }
+    if (aboutOpen) TopicAbout(topic, onDismiss = { aboutOpen = false }, onOpen = {
+        aboutOpen = false
+        onOpenTopic(topic)
+    })
     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
     if (actionsOpen) TopicActions(
         topic = topic,
@@ -640,6 +650,7 @@ private fun TopicRow(
         onDismiss = { actionsOpen = false },
         onToggleStar = { actionsOpen = false; onToggleStar(topic) },
         onReport = { kind -> actionsOpen = false; onReport(topic, kind) },
+        onAbout = { actionsOpen = false; aboutOpen = true },
     )
 }
 
@@ -651,6 +662,7 @@ private fun TopicActions(
     onDismiss: () -> Unit,
     onToggleStar: () -> Unit,
     onReport: (String) -> Unit,
+    onAbout: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -658,6 +670,7 @@ private fun TopicActions(
         title = { Text(topic.title) },
         text = {
             Column {
+                Button(onClick = onAbout, modifier = Modifier.testTag("topic-context-about")) { Text("About") }
                 if (canStar) Button(onClick = onToggleStar) { Text(if (starred) "Unstar" else "Star") }
                 Text("Report", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
                 Button(onClick = { onReport("low_quality") }) { Text("Low quality") }

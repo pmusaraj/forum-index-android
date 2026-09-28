@@ -51,17 +51,21 @@ class TopicDetailUiTest {
             "<div class='post-metadata'>\n### Author: [@user$index](/u/user$index)\n</div>\n\n" +
                 if (index == 10) "[Open linked reply](/t/linked/22/7?mode=one#post)" else "Post $index " + "Text. ".repeat(50)
         }
-        show(source = { url ->
+        show(topics = listOf(topic(1).copy(externalSignals = listOf(
+            ExternalSignal(ExternalSignalSource.LOBSTERS, URL("https://lobste.rs/s/example")),
+        ))), source = { url ->
             requests += url.toString()
             if (url.toString() == linkedUrl) MarkdownPage("# Linked title\n\n**URL:** $linkedUrl\n**Showing post:** 7\n\n<div class='post-metadata'>\n### Author: [@bob](/u/bob)\n</div>\n\nLinked reply.", url)
             else MarkdownPage("# Root\n\n**URL:** $url\n\n$rootMarkdown", url)
         }, toggle = { selectedStar = it })
+        compose.onNodeWithTag("external-signal-lobsters").assertIsDisplayed()
         compose.onNodeWithTag("topic-markdown-preview").performScrollToIndex(11)
         val before = compose.onNodeWithTag("post-author-10").fetchSemanticsNode().boundsInRoot.top
         clickMarkdownLink("Open linked reply")
         compose.onNodeWithText("Linked title").assertIsDisplayed()
         compose.onNodeWithText("@bob").assertIsDisplayed()
         compose.onNodeWithTag("topic-preview-details").assertDoesNotExist()
+        compose.onNodeWithTag("external-signal-lobsters").assertDoesNotExist()
         compose.onNodeWithTag("fixture-web").assertDoesNotExist()
         compose.onNodeWithContentDescription("Star").performClick()
         compose.runOnIdle {

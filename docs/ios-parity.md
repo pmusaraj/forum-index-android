@@ -81,3 +81,18 @@ Matched iOS [8abf4cd](https://github.com/pmusaraj/forum-index-app/commit/8abf4cd
 Also reviewed the adjacent working-tree changes: the iPad subject-picker popover sizing fix has no direct Android equivalent because the Android picker already uses a height-constrained modal bottom sheet. iOS screenshot fixtures/export tooling and TestFlight build metadata remain platform-specific. Verification remains excluded.
 
 Validation: `testDebugUnitTest` passed (76 tests); `assembleDebug` passed. The existing cold-launch test now covers the expanded ordering and taxonomy filtering, and saved-selection coverage still passes. Emulator tests were not rerun for this default-list and label change.
+
+## September 27 recent non-macOS changes
+
+Compared the previous `8abf4cd` baseline with the adjacent repository's `origin/main` at [2b2c00d](https://github.com/pmusaraj/forum-index-app/commit/2b2c00d). Its checked-out `main` is older; this comparison uses committed remote-tracking history without changing that checkout.
+
+- `2c276e4`: parse bold `**Author:**` and `**Post date:**` metadata as well as heading metadata. Preserve fenced examples and ordinary post Markdown.
+- `0ad929d`: reveal a compact title after 12 dp of upward scrolling once the original title is offscreen; hide it on downward scrolling or returning to the top. Android tracks consumed nested-scroll distance, so layout changes, programmatic list jumps, and unconsumed overscroll do not reveal it. Reset visibility when changing the active page; use immediate transitions without motion effects.
+- `b00a5d8`: add About to the feed's long-press actions, showing a selectable plain-text excerpt, community details with loading/retry, browser links, and an explicit Open topic action. Merely inspecting About does not mark a topic read.
+- `dfe0eb5`: decode optional Hacker News/Lobsters signals, skipping unknown or invalid entries individually. Show source icons and accessible descriptions in feed rows, and browser discussion links in the root Markdown preview. Linked previews do not reuse the source topic's signals.
+- Match the starred control's accent color and accessible Starred/Not starred state; retain native Android button behavior.
+- `b3128cb`: Android already commits subject selection from `settledPage`, preserving per-subject list state. No additional pager change was needed.
+
+macOS sidebar/layout, keyboard commands, desktop colors/fonts, and Apple signing/TestFlight build changes are excluded. Android verification remains deferred. Existing reader/rendering differences above remain applicable.
+
+Validation: 80 JVM tests passed; debug APK, test APK, release APK, and release lint passed (0 errors, 30 warnings). On Pixel 6 / Android 13 (API 33), the initial full run passed 42 of 45 tests. After expanding the About sheet fully and using a bounded title-scroll gesture, all 14 recent-feature/reader tests passed on rerun, including the previously failing WebView gesture check and the added linked-signal isolation assertion. Thus all 45 distinct emulator scenarios passed across the two runs; this is not a claim of a single clean full-suite run. Physical-device/TalkBack checks and live external-discussion API/browser verification remain manual follow-up.

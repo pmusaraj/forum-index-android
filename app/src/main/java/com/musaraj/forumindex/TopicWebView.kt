@@ -57,6 +57,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -203,7 +204,7 @@ internal fun TopicActions(topic: StarredTopic, starred: Boolean, onToggleStar: (
         modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TopicControl("Share", "↗") {
+        TopicControl("Share", "↗", onClick = {
             try {
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
@@ -211,19 +212,22 @@ internal fun TopicActions(topic: StarredTopic, starred: Boolean, onToggleStar: (
                     putExtra(Intent.EXTRA_TEXT, topic.url)
                 }, null))
             } catch (_: ActivityNotFoundException) { /* No share targets installed. */ }
-        }
-        TopicControl(if (starred) "Unstar" else "Star", if (starred) "★" else "☆", onToggleStar)
+        })
+        TopicControl(if (starred) "Unstar" else "Star", if (starred) "★" else "☆", onToggleStar, starred)
         TopicControl("Close", "×", onDismiss)
     }
 }
 
 @Composable
-private fun TopicControl(label: String, glyph: String, onClick: () -> Unit) {
+private fun TopicControl(label: String, glyph: String, onClick: () -> Unit, starred: Boolean? = null) {
     IconButton(
         onClick = onClick,
         modifier = Modifier.size(48.dp).shadow(4.dp, CircleShape).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .94f), CircleShape)
-            .semantics { contentDescription = label },
-    ) { Text(glyph, fontSize = 24.sp) }
+            .semantics {
+                contentDescription = label
+                starred?.let { stateDescription = if (it) "Starred" else "Not starred" }
+            },
+    ) { Text(glyph, fontSize = 24.sp, color = if (starred == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
 }
 
 @SuppressLint("SetJavaScriptEnabled")
