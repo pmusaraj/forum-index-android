@@ -21,7 +21,13 @@ The ordinary CI workflow also runs tests, lint, and unsigned build checks for pu
 
 ## Signing
 
-The repository uses a dedicated GitHub APK signing key. Keep the same key for every update. Its private material lives in these GitHub Actions secrets:
+The repository uses a dedicated GitHub APK signing key. Keep the same key for every update. Its certificate SHA-256 fingerprint is:
+
+```text
+41a43761c359100138dae9950216a0d113d23b355a5362c7ef5006080b83c768
+```
+
+Its private material lives in these GitHub Actions secrets:
 
 | Secret | Value |
 | --- | --- |
