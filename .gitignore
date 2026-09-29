@@ -21,3 +21,10 @@ keystore.properties
 .env.*
 *.p12
 *.pem
+
+# Local signing material and packaged builds
+*.pfx
+*.key
+*.apk
+*.aab
+signing-secrets.json

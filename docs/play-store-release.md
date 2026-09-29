@@ -70,6 +70,6 @@ References: [User data policy](https://support.google.com/googleplay/android-dev
 - All 47 JVM tests passed; `assembleRelease` succeeded.
 - `lintRelease` completed with 0 errors and 26 warnings (dependency updates, launcher icon shape, and code-style/catalog suggestions).
 - Missing upload credentials correctly fail `checkPlaySigning`.
-- `bundleRelease` succeeded with a disposable test key and its JAR signature verified. The test bundle was moved outside the repository to `/private/tmp/forum-index-signing-check/TEST-ONLY-forum-index.aab`; it is not a production upload artifact. Build again with the real upload key before submission.
+- `bundleRelease` succeeded with a disposable test key and its JAR signature verified. The disposable test bundle is not a production upload artifact. Build again with the real upload key before submission.
 - Store text fits the title, short-description, and full-description character limits.
 - Device/UI tests were not run: no device or emulator was connected. Play-delivered and 16 KB device checks remain pending.

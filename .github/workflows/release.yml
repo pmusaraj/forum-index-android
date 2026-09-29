@@ -1,0 +1,107 @@
+name: Release APK
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate version tag
+        id: version
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)$ ]]; then
+            echo 'Expected vMAJOR.MINOR.PATCH; minor and patch must be 0–99.' >&2
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          if (( ${#major} > 6 )) || (( major > 209999 )); then
+            echo 'Major version exceeds the Android version code limit.' >&2
+            exit 1
+          fi
+          code=$((major * 10000 + minor * 100 + patch))
+          if (( code < 1 )); then
+            echo 'Version code must be positive.' >&2
+            exit 1
+          fi
+          echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      - run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@4c125117fe7c5aed11272ec4213f602f012f89f2 # v5
+        with:
+          cache-disabled: true
+      - name: Test and lint
+        run: ./gradlew --no-daemon testDebugUnitTest lintRelease
+      - name: Build signed APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          FORUM_INDEX_UPLOAD_STORE_FILE: ${{ runner.temp }}/release.jks
+          FORUM_INDEX_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          FORUM_INDEX_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          FORUM_INDEX_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+        shell: bash
+        run: |
+          for name in KEYSTORE_BASE64 FORUM_INDEX_UPLOAD_STORE_PASSWORD FORUM_INDEX_UPLOAD_KEY_ALIAS FORUM_INDEX_UPLOAD_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing signing secret: $name" >&2
+              exit 1
+            fi
+          done
+          umask 077
+          trap 'rm -f "$FORUM_INDEX_UPLOAD_STORE_FILE"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$FORUM_INDEX_UPLOAD_STORE_FILE"
+          ./gradlew --no-daemon checkPlaySigning assembleRelease \
+            -PreleaseVersionName="$VERSION_NAME" -PreleaseVersionCode="$VERSION_CODE"
+      - name: Verify and package APK
+        shell: bash
+        run: |
+          mkdir -p dist
+          apk="forum-index-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "dist/$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "dist/$apk" > dist/signing-certificate.txt
+          cat dist/signing-certificate.txt
+          cd dist
+          sha256sum "$apk" > SHA256SUMS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # Draft first: a failed upload must not leave a published release without its APK.
+          if gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft > "$RUNNER_TEMP/release-state"; then
+            if [[ "$(cat "$RUNNER_TEMP/release-state")" != true ]]; then
+              echo 'This release is already published; use a new version tag.' >&2
+              exit 1
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+              --title "Forum Index ${GITHUB_REF_NAME#v}" --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"

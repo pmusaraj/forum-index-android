@@ -2,6 +2,12 @@
 
 Native Android companion for Forum Index, built with Kotlin and Jetpack Compose.
 
+## Download
+
+Download the signed APK from [GitHub Releases](https://github.com/pmusaraj/forum-index-android/releases/latest). Requires Android 9 or newer. Allow your browser or file manager to install apps when Android prompts you. Future releases can update an existing GitHub installation without losing local data.
+
+See [the APK release guide](docs/github-releases.md) for publishing, signing, and checksum verification.
+
 The Android app aims for feature and behavior parity with the [iOS application](https://github.com/pmusaraj/forum-index-app). See [the parity goal and comparison process](docs/ios-parity.md) and [implementation checklist](docs/parity-checklist.md).
 
 ## Requirements
