@@ -1,0 +1,439 @@
+{
+  "feed": "main",
+  "version": "v2",
+  "ranking_version": "v2",
+  "locale": "en",
+  "page": 1,
+  "per_page": 30,
+  "total_count": 12,
+  "total_pages": 1,
+  "count": 12,
+  "results": [
+    {
+      "id": 105238,
+      "external_id": "144629",
+      "title": "Scalable Vector Shapes 2D - Evolving Roadmap",
+      "url": "https://forum.godotengine.org/t/scalable-vector-shapes-2d-evolving-roadmap/144629",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "https://forum.godotengine.org/uploads/default/original/3X/6/f/6ff1d34c6fe5cf02840ed64cec18b81bbaa3cda8.jpeg",
+      "category_name": "",
+      "tags": [
+        "godot-4",
+        "2d",
+        "animation",
+        "plugin"
+      ],
+      "published_at": "2026-09-24T20:07:02.898Z",
+      "last_activity_at": "2026-09-24T21:00:23.836Z",
+      "engagement": {
+        "replies": 4,
+        "likes": 5,
+        "views": 12,
+        "participants": 2,
+        "hotness": 37.2475
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 952,
+        "name": "Godot Forum",
+        "slug": "forum-godotengine-org",
+        "base_url": "https://forum.godotengine.org",
+        "icon_url": "https://forum.godotengine.org/uploads/default/optimized/2X/6/6aa102e258d388445ee33e276c62cec922ccb756_2_32x32.png",
+        "supports_markdown": false,
+        "source": "discover",
+        "language": "en",
+        "tags": [
+          "featured",
+          "gamedev",
+          "gaming",
+          "open-source"
+        ]
+      }
+    },
+    {
+      "id": 103187,
+      "external_id": "75843",
+      "title": "How to stay consistent when you've got a new obsession taking over your mind?",
+      "url": "https://community.wanikani.com/t/how-to-stay-consistent-when-youve-got-a-new-obsession-taking-over-your-mind/75843",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "",
+      "category_name": "",
+      "tags": [],
+      "published_at": "2026-09-24T05:45:11.731Z",
+      "last_activity_at": "2026-09-24T14:16:18.397Z",
+      "engagement": {
+        "replies": 8,
+        "likes": 39,
+        "views": 95,
+        "participants": 5,
+        "hotness": 14.9321
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 674,
+        "name": "WaniKani Community",
+        "slug": "community-wanikani-com",
+        "base_url": "https://community.wanikani.com",
+        "icon_url": "https://global.discourse-cdn.com/wanikanicommunity/optimized/4X/1/8/d/18d7edc2baa0b64242cf98a21b0aeb606aeca9d1_2_32x32.png",
+        "supports_markdown": true,
+        "source": "discover",
+        "language": "en",
+        "tags": [
+          "interests",
+          "learning"
+        ]
+      }
+    },
+    {
+      "id": 103830,
+      "external_id": "1460771",
+      "title": "Sparkfun pro mini 5v running with 3.3v",
+      "url": "https://forum.arduino.cc/t/sparkfun-pro-mini-5v-running-with-3-3v/1460771",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "",
+      "category_name": "",
+      "tags": [],
+      "published_at": "2026-09-24T08:35:50.420Z",
+      "last_activity_at": "2026-09-24T14:40:17.609Z",
+      "engagement": {
+        "replies": 15,
+        "likes": 11,
+        "views": 76,
+        "participants": 5,
+        "hotness": 15.2324
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 961,
+        "name": "Arduino Forum",
+        "slug": "forum-arduino-cc",
+        "base_url": "https://forum.arduino.cc",
+        "icon_url": "https://europe1.discourse-cdn.com/arduino/optimized/3X/c/c/cc4b0921af3d89006e843364a2b18989ad72f83e_2_32x32.png",
+        "supports_markdown": false,
+        "source": "discover",
+        "language": "en",
+        "tags": [
+          "technology"
+        ]
+      }
+    },
+    {
+      "id": 103320,
+      "external_id": "524424",
+      "title": "[FRC Blog] Systemcore Pricing and Availability",
+      "url": "https://www.chiefdelphi.com/t/frc-blog-systemcore-pricing-and-availability/524424",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "",
+      "category_name": "",
+      "tags": [],
+      "published_at": "2026-09-23T19:21:58.985Z",
+      "last_activity_at": "2026-09-24T13:38:16.714Z",
+      "engagement": {
+        "replies": 76,
+        "likes": 369,
+        "views": 2412,
+        "participants": 5,
+        "hotness": 13.5954
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 1131,
+        "name": "chiefdelphi.com",
+        "slug": "chiefdelphi-com",
+        "base_url": "https://www.chiefdelphi.com",
+        "icon_url": "https://www.chiefdelphi.com/uploads/default/optimized/1X/8e74375c59848e271fde74991f61fffd3a63a1fd_2_32x32.png",
+        "supports_markdown": false,
+        "source": "manual",
+        "language": "en",
+        "tags": []
+      }
+    },
+    {
+      "id": 103321,
+      "external_id": "399232",
+      "title": "Swag Drop: The Arcade Backpack",
+      "url": "https://discuss.google.dev/t/swag-drop-the-arcade-backpack/399232",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "https://d2yds90mtvelsl.cloudfront.net/original/4X/c/4/8/c48e27878cf37a9368b63e7f8ba5e28eae209f30.gif",
+      "category_name": "",
+      "tags": [
+        "learning"
+      ],
+      "published_at": "2026-09-24T03:03:55.807Z",
+      "last_activity_at": "2026-09-24T15:39:43.695Z",
+      "engagement": {
+        "replies": 13,
+        "likes": 39,
+        "views": 1857,
+        "participants": 5,
+        "hotness": 13.468
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 1133,
+        "name": "discuss.google.dev",
+        "slug": "discuss-google-dev",
+        "base_url": "https://discuss.google.dev",
+        "icon_url": "https://d2yds90mtvelsl.cloudfront.net/optimized/3X/0/2/02474200c669ecb29e8389dc679a3c5c20b92191_2_32x32.png",
+        "supports_markdown": false,
+        "source": "manual",
+        "language": "en",
+        "tags": []
+      }
+    },
+    {
+      "id": 105303,
+      "external_id": "115919",
+      "title": "Harlech Castle: The Fortress That Defied Kings | 4K, Narrated History & Reconstructions",
+      "url": "https://greyarro.ws/t/harlech-castle-the-fortress-that-defied-kings-4k-narrated-history-reconstructions/115919",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "https://d1q8cepst0v8xp.cloudfront.net/optimized/3X/d/d/dd8e67cdad7030f63f3009b85deca8264161b2f6_2_1024x576.jpeg",
+      "category_name": "Videos by Drone",
+      "tags": [
+        "air3s",
+        "history"
+      ],
+      "published_at": "2026-09-24T20:15:15.658Z",
+      "last_activity_at": "2026-09-24T21:24:04.638Z",
+      "engagement": {
+        "replies": 3,
+        "likes": 8,
+        "views": 19,
+        "participants": 2,
+        "hotness": 40.8246
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 999,
+        "name": "Grey Arrows Drone Club UK",
+        "slug": "greyarro-ws",
+        "base_url": "https://greyarro.ws",
+        "icon_url": "https://d1q8cepst0v8xp.cloudfront.net/optimized/1X/88f5356d1e252987db42e5109eb3049f8e3e142c_2_32x32.png",
+        "supports_markdown": false,
+        "source": "discover",
+        "language": "en",
+        "tags": [
+          "hobbies",
+          "interests",
+          "technology"
+        ]
+      }
+    },
+    {
+      "id": 103353,
+      "external_id": "160333",
+      "title": "To an Incredible Community and a Masterpiece of a Game",
+      "url": "https://forums.crateentertainment.com/t/to-an-incredible-community-and-a-masterpiece-of-a-game/160333",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "https://forums.crateentertainment.com/uploads/default/original/3X/0/d/0d201ef00282c25819dd1dc713c6d24cffb063d4.png",
+      "category_name": "",
+      "tags": [],
+      "published_at": "2026-09-23T20:29:26.504Z",
+      "last_activity_at": "2026-09-24T17:19:12.908Z",
+      "engagement": {
+        "replies": 24,
+        "likes": 72,
+        "views": 362,
+        "participants": 5,
+        "hotness": 11.124
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 1140,
+        "name": "forums.crateentertainment.com",
+        "slug": "forums-crateentertainment-com",
+        "base_url": "https://forums.crateentertainment.com",
+        "icon_url": "https://forums.crateentertainment.com/uploads/default/optimized/3X/d/6/d66380a6944dd18c9ff68b7ad2ec5e8c084a1fa9_2_32x32.png",
+        "supports_markdown": false,
+        "source": "manual",
+        "language": "en",
+        "tags": []
+      }
+    },
+    {
+      "id": 105181,
+      "external_id": "1033339",
+      "title": "The Great SDMB Movie Poll - Round 1 The Great 128",
+      "url": "https://boards.straightdope.com/t/the-great-sdmb-movie-poll-round-1-the-great-128/1033339",
+      "author_name": "",
+      "excerpt": "Round 1 consists of 128 head-to-head matchups between the 256 randomly seeded movies nominated as Top 10 Favorites. Since there are 128 matchups it\u2019s going to take me a while to post all of them so please refrain from c&hellip;",
+      "image_url": "",
+      "category_name": "Cafe Society",
+      "tags": [
+        "movies"
+      ],
+      "published_at": "2026-09-24T14:07:03.690Z",
+      "last_activity_at": "2026-09-24T20:36:25.424Z",
+      "engagement": {
+        "replies": 46,
+        "likes": 0,
+        "views": 89,
+        "participants": 5,
+        "hotness": 24.9181
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 922,
+        "name": "Straight Dope Message Board",
+        "slug": "boards-straightdope-com",
+        "base_url": "https://boards.straightdope.com",
+        "icon_url": "https://global.discourse-cdn.com/straightdope/optimized/2X/e/e489c3b7d8fce19c4b355dd4fc3f88cc39c34b87_2_32x32.png",
+        "supports_markdown": false,
+        "source": "discover",
+        "language": "en",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    {
+      "id": 103619,
+      "external_id": "1258068",
+      "title": "Who's adopted the New Outlook?",
+      "url": "https://community.spiceworks.com/t/whos-adopted-the-new-outlook/1258068",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "",
+      "category_name": "",
+      "tags": [
+        "discussion",
+        "email",
+        "general-software",
+        "microsoft-office-365",
+        "water-cooler"
+      ],
+      "published_at": "2026-09-23T20:24:34.818Z",
+      "last_activity_at": "2026-09-24T19:03:47.004Z",
+      "engagement": {
+        "replies": 35,
+        "likes": 194,
+        "views": 156,
+        "participants": 5,
+        "hotness": 12.8153
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 802,
+        "name": "Spiceworks Community",
+        "slug": "community-spiceworks-com",
+        "base_url": "https://community.spiceworks.com",
+        "icon_url": "https://us1.discourse-cdn.com/spiceworks/optimized/1X/a254df83358a951c43ed6ee756b5e0011a8d58bc_2_32x32.png",
+        "supports_markdown": false,
+        "source": "discover",
+        "language": "en",
+        "tags": [
+          "technology"
+        ]
+      }
+    },
+    {
+      "id": 103837,
+      "external_id": "40974",
+      "title": "State of Tor in 2026",
+      "url": "https://discuss.privacyguides.net/t/state-of-tor-in-2026/40974",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "",
+      "category_name": "Questions",
+      "tags": [],
+      "published_at": "2026-09-24T08:36:20.742Z",
+      "last_activity_at": "2026-09-24T17:42:01.448Z",
+      "engagement": {
+        "replies": 4,
+        "likes": 9,
+        "views": 288,
+        "participants": 5,
+        "hotness": 13.6617
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 966,
+        "name": "Privacy Guides Community",
+        "slug": "discuss-privacyguides-net",
+        "base_url": "https://discuss.privacyguides.net",
+        "icon_url": "https://forum-uploads.privacyguidesusercontent.com/optimized/2X/5/50d23e21c43962bb12c02820fa3f19ac61dac917_2_32x32.png",
+        "supports_markdown": true,
+        "source": "discover",
+        "language": "en",
+        "tags": [
+          "technology"
+        ]
+      }
+    },
+    {
+      "id": 103852,
+      "external_id": "115882",
+      "title": "Format error message when entering remote ID Air 3S",
+      "url": "https://greyarro.ws/t/format-error-message-when-entering-remote-id-air-3s/115882",
+      "author_name": "",
+      "excerpt": "",
+      "image_url": "",
+      "category_name": "Questions & Answers",
+      "tags": [],
+      "published_at": "2026-09-24T08:39:20.510Z",
+      "last_activity_at": "2026-09-24T15:50:45.179Z",
+      "engagement": {
+        "replies": 16,
+        "likes": 16,
+        "views": 73,
+        "participants": 5,
+        "hotness": 16.0423
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 999,
+        "name": "Grey Arrows Drone Club UK",
+        "slug": "greyarro-ws",
+        "base_url": "https://greyarro.ws",
+        "icon_url": "https://d1q8cepst0v8xp.cloudfront.net/optimized/1X/88f5356d1e252987db42e5109eb3049f8e3e142c_2_32x32.png",
+        "supports_markdown": false,
+        "source": "discover",
+        "language": "en",
+        "tags": [
+          "hobbies",
+          "interests",
+          "technology"
+        ]
+      }
+    },
+    {
+      "id": 104568,
+      "external_id": "524453",
+      "title": "FIRST Dashboard Issues",
+      "url": "https://www.chiefdelphi.com/t/first-dashboard-issues/524453",
+      "author_name": "",
+      "excerpt": "Did the FIRST Dashboard already crash? I am getting a proxy error on laptop and mobile\u2026.",
+      "image_url": "",
+      "category_name": "",
+      "tags": [],
+      "published_at": "2026-09-24T14:57:31.137Z",
+      "last_activity_at": "2026-09-24T18:20:49.520Z",
+      "engagement": {
+        "replies": 25,
+        "likes": 60,
+        "views": 558,
+        "participants": 5,
+        "hotness": 32.0957
+      },
+      "editorial_status": "normal",
+      "forum": {
+        "id": 1131,
+        "name": "chiefdelphi.com",
+        "slug": "chiefdelphi-com",
+        "base_url": "https://www.chiefdelphi.com",
+        "icon_url": "https://www.chiefdelphi.com/uploads/default/optimized/1X/8e74375c59848e271fde74991f61fffd3a63a1fd_2_32x32.png",
+        "supports_markdown": false,
+        "source": "manual",
+        "language": "en",
+        "tags": []
+      }
+    }
+  ]
+}

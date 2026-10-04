@@ -55,7 +55,7 @@ jobs:
           cache-disabled: true
       - name: Test and lint
         run: ./gradlew --no-daemon testDebugUnitTest lintRelease
-      - name: Build signed APK
+      - name: Build signed APK and Play bundle
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           FORUM_INDEX_UPLOAD_STORE_FILE: ${{ runner.temp }}/release.jks
@@ -75,9 +75,9 @@ jobs:
           umask 077
           trap 'rm -f "$FORUM_INDEX_UPLOAD_STORE_FILE"' EXIT
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$FORUM_INDEX_UPLOAD_STORE_FILE"
-          ./gradlew --no-daemon checkPlaySigning assembleRelease \
+          ./gradlew --no-daemon checkPlaySigning assembleRelease bundleRelease \
             -PreleaseVersionName="$VERSION_NAME" -PreleaseVersionCode="$VERSION_CODE"
-      - name: Verify and package APK
+      - name: Verify and package release files
         shell: bash
         run: |
           mkdir -p dist
@@ -85,8 +85,12 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "dist/$apk"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "dist/$apk" > dist/signing-certificate.txt
           cat dist/signing-certificate.txt
+          aab="forum-index-${GITHUB_REF_NAME}.aab"
+          cp app/build/outputs/bundle/release/app-release.aab "dist/$aab"
+          jarsigner -verify "dist/$aab" | tee "$RUNNER_TEMP/bundle-verification.txt"
+          grep -q 'jar verified.' "$RUNNER_TEMP/bundle-verification.txt"
           cd dist
-          sha256sum "$apk" > SHA256SUMS
+          sha256sum "$apk" "$aab" > SHA256SUMS
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -108,3 +112,14 @@ jobs:
       - name: Remove signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks"
+
+  play-testing:
+    needs: release
+    if: vars.PLAY_UPLOADS_ENABLED == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/play-testing.yml
+    with:
+      tag: ${{ github.ref_name }}
+      track: internal

@@ -1,0 +1,156 @@
+[
+  {
+    "path": "graphics/icon.png",
+    "width": 512,
+    "height": 512,
+    "bytes": 46404,
+    "sha256": "6b7b56444eedac27132b87fed37a9d8257384492e5b972abe2d7807d0758732a"
+  },
+  {
+    "path": "graphics/feature-graphic.png",
+    "width": 1024,
+    "height": 500,
+    "bytes": 33666,
+    "sha256": "c4e72f4cb1bea6c972789bcc780b13ce59248b07cd8dee14d11df7a834be7514"
+  },
+  {
+    "path": "screenshots/phone/light/01-discover.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 149095,
+    "sha256": "cf7ac9c4a9080204841af5ad8aa0caf8c96d3e74cdebba7a6d54b8b61ec509f2"
+  },
+  {
+    "path": "screenshots/phone/light/02-reader.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 246438,
+    "sha256": "f4f0c7af1d60a797b564bbf5a9bf470fca02a2fd985f3dade006b1802268f067"
+  },
+  {
+    "path": "screenshots/phone/light/03-community.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 187024,
+    "sha256": "a687288f03ee705609470051aa5c6432bdef148427868f1ac7255cc5133cb486"
+  },
+  {
+    "path": "screenshots/phone/light/04-starred.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 127261,
+    "sha256": "782133905d6c30865d34e5d93aa52fbca938aeb65b359ee7842d2d2c1401d00b"
+  },
+  {
+    "path": "screenshots/phone/light/05-subjects.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 72580,
+    "sha256": "a90b3a002844783487bccd00cc2c9f3c02d488f1c2be7b7e25d72f64ced85cf8"
+  },
+  {
+    "path": "screenshots/phone/dark/01-discover.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 149574,
+    "sha256": "33f57e3e87158027ff095e27fef4d8c75c261b4841197992f48a82ea19945632"
+  },
+  {
+    "path": "screenshots/phone/dark/02-reader.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 230569,
+    "sha256": "5e1fe0e5cd8784712bdd3e2ea944ba384c50e2b3a0e4a000d3a735c0a74f16ae"
+  },
+  {
+    "path": "screenshots/phone/dark/03-community.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 176152,
+    "sha256": "0cc6ad5345af32dcaec470f471f9952483cbe58558527a9f11dd75f18e7611ab"
+  },
+  {
+    "path": "screenshots/phone/dark/04-starred.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 126666,
+    "sha256": "0f8c8c77a73f52d16aedd995c8b6c97dcdd25017b8f20f2b5cf05c4f89068913"
+  },
+  {
+    "path": "screenshots/phone/dark/05-subjects.png",
+    "width": 1080,
+    "height": 1920,
+    "bytes": 71493,
+    "sha256": "53f09561424ed1d4422fe3c6d039f11880451983c298b9fc2814ca7a72e9421e"
+  },
+  {
+    "path": "screenshots/tablet/light/01-discover.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 281132,
+    "sha256": "23834d86ac2b86c228bda8d536ca3227224dc98275d6161ef10f6d432105bdf9"
+  },
+  {
+    "path": "screenshots/tablet/light/02-reader.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 396768,
+    "sha256": "665dcf33915a8730283ec25a5fc4e4af974c3772772f54bc4dc360b9df20f471"
+  },
+  {
+    "path": "screenshots/tablet/light/03-community.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 360927,
+    "sha256": "8c800efca3328d8ef8373cdc7abccd3c1c660dc8c849089b530fb852d8f00126"
+  },
+  {
+    "path": "screenshots/tablet/light/04-starred.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 232197,
+    "sha256": "f155dd7904fee4cab4594d73c56a36ef0e3496629bfbc97dd25a07e09770fceb"
+  },
+  {
+    "path": "screenshots/tablet/light/05-subjects.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 216063,
+    "sha256": "ad8a2eafb82d71bf789c4983edc5a4712d3a7375c98e7570ea113bc08cd14932"
+  },
+  {
+    "path": "screenshots/tablet/dark/01-discover.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 244550,
+    "sha256": "93252fd263e022e0b8ba7604403d3af8ee54a4189897fcba25d898722e1e5654"
+  },
+  {
+    "path": "screenshots/tablet/dark/02-reader.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 397490,
+    "sha256": "5f6f8e3e1d08626c9ffe4f233316f5f01ca783a01d963b3999db193e624a5763"
+  },
+  {
+    "path": "screenshots/tablet/dark/03-community.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 352008,
+    "sha256": "707ae0cdc845f0fdb4556b042e47008c9e0ce87d72fabc9ffd934a54251d3a27"
+  },
+  {
+    "path": "screenshots/tablet/dark/04-starred.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 180857,
+    "sha256": "f73f72357062cc91f53e8acbbbb9e2a1f4b4a20c63999e96d490692613c64cfb"
+  },
+  {
+    "path": "screenshots/tablet/dark/05-subjects.png",
+    "width": 1600,
+    "height": 2560,
+    "bytes": 222905,
+    "sha256": "227c7330c37094d4c4bb6ce7fe443ae0d95f3c7ba33c866ef71f571b5893d7a0"
+  }
+]

@@ -28,3 +28,7 @@ keystore.properties
 *.apk
 *.aab
 signing-secrets.json
+
+# Google Actions temporary credentials
+gha-creds-*.json
+__pycache__/

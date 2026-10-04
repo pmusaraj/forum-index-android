@@ -37,4 +37,4 @@ The app reads the existing Forum Index public API, keeps feed caches in memory, 
 
 ## Google Play release
 
-See [the release guide](docs/play-store-release.md) for upload signing, versioning, bundle builds, store materials, testing, and remaining Console requirements. Store listing drafts are in `store/`; the [data inventory](docs/privacy-data-inventory.md) supports privacy-policy and Data safety preparation.
+See [the release guide](docs/play-store-release.md) for upload signing, versioning, bundle builds, store materials, testing, and remaining Console requirements. Store listing drafts are in `store/`, alongside the [icon, feature graphic, and Android screenshot gallery](store/index.html). The [asset guide](store/README.md) explains uploads and regeneration; the [data inventory](docs/privacy-data-inventory.md) supports privacy-policy and Data safety preparation.

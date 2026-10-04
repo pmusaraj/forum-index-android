@@ -2,11 +2,15 @@
 
 ## Current status
 
-Package: `com.musaraj.forumindex`. Default first release: version code `1`, version name `1.0`. Minimum Android version: 9 (API 28); compile/target SDK: 37. Confirm the package name before the first upload: it is the permanent Play identity. Check the latest [target API requirements](https://developer.android.com/google/play/requirements/target-sdk) before submission.
+Package: `com.musaraj.forumindex`, confirmed for the prepared Play Console app on October 3, 2026. Minimum Android version: 9 (API 28); compile/target SDK: 37. Check the latest [target API requirements](https://developer.android.com/google/play/requirements/target-sdk) before submission.
 
-Repository preparation does not create a Play Console app or publish a release. Remaining submission requirements are listed below.
+The first testing upload was completed in Play Console (confirmed October 4, 2026). The prepared first bundle is version `1.0.0`, code `10000`. Use a new version code for subsequent uploads and follow the [shared version numbering scheme](github-releases.md); local Gradle defaults (`1.0`, code `1`) are not the published release version. See [testing automation](play-testing-automation.md) for GitHub authentication, automatic internal releases, and manual retries.
 
 ## Upload signing
+
+For the first Play upload, no build or upload certificate has been registered yet (confirmed October 3, 2026). The first bundle uses the existing GitHub release key, whose public certificate fingerprint is recorded in [the GitHub release guide](github-releases.md).
+
+Before completing Play App Signing enrollment, choose the app signing identity deliberately: import the existing GitHub signing key using Play Console's PEPK instructions if Play builds should update GitHub installations. Letting Google generate a different app signing key prevents updates between those distributions, even when the bundle uses the GitHub key as its upload key. A public upload certificate alone does not transfer the app signing key. Keep the keystore, passwords, and encrypted private-key export out of Git and GitHub Release assets.
 
 Use an existing upload key if this package is already registered. For a new app, create a dedicated upload key outside the repository. Let `keytool` prompt for passwords:
 
@@ -29,7 +33,7 @@ All four variables are required for `bundleRelease`. Debug builds and unsigned r
 ```sh
 ./gradlew checkPlaySigning
 ./gradlew testDebugUnitTest lintRelease bundleRelease \
-  -PreleaseVersionCode=1 -PreleaseVersionName=1.0
+  -PreleaseVersionCode=10000 -PreleaseVersionName=1.0.0
 jarsigner -verify app/build/outputs/bundle/release/app-release.aab
 ```
 
@@ -40,8 +44,7 @@ Upload `app/build/outputs/bundle/release/app-release.aab`. Increment the version
 Draft English copy is in `store/listings/en-US/`; first-release notes are in `store/release-notes/en-US/1.txt`. These are plain text for copying into Console, not a configured automatic publishing integration.
 
 - Supply a support email, public privacy-policy URL, and optional website.
-- Export a 512 × 512 store icon from the original artwork; current launcher PNGs are not a full-resolution store master.
-- Create a 1024 × 500 feature graphic and at least two genuine phone screenshots. Suggested views: main feed, subject tabs, starred topics. Use production-like content without personal information.
+- Store icon, feature graphic, and five Android screenshots per appearance for phone and tablet are prepared in `store/`. See the [asset gallery](../store/index.html) and [upload instructions](../store/README.md).
 - Select the category, audience, countries, and pricing, and complete the content-rating questionnaire based on the forum content users can encounter. Do not assume the app is suitable for children.
 
 See Google's [preview asset specifications](https://support.google.com/googleplay/android-developer/answer/9866151).

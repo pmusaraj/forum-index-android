@@ -1,6 +1,6 @@
 # GitHub APK releases
 
-Pushing a version tag runs `.github/workflows/release.yml`: unit tests, release lint, signed APK build, signature verification, and publication to GitHub Releases. Assets include the APK, `SHA256SUMS`, and public signing-certificate details. The release remains a draft until all assets upload successfully. Already published releases are never overwritten by the workflow.
+Pushing a version tag runs `.github/workflows/release.yml`: unit tests, release lint, signed APK/AAB builds, signature verification, and publication to GitHub Releases. New releases include the APK, Play AAB, `SHA256SUMS`, and public APK signing-certificate details. The release remains a draft until all assets upload successfully. Already published releases are never overwritten by the workflow. When `PLAY_UPLOADS_ENABLED=true`, the signed AAB is then [released to Play Internal testing](play-testing-automation.md); the separate Play workflow supports retries without rebuilding.
 
 ## Publish
 
