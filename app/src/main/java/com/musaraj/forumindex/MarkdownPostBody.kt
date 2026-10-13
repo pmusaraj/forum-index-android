@@ -85,6 +85,7 @@ internal fun MarkdownPostBody(markdown: String, renderer: Markwon, onRendered: (
     AndroidView(
         modifier = Modifier.fillMaxWidth(),
         factory = { context -> TextView(context).apply {
+            typeface = context.resources.getFont(R.font.source_sans_3)
             textSize = 16f
             setTextColor(colors.onSurface.toArgb())
             setLinkTextColor(colors.primary.toArgb())

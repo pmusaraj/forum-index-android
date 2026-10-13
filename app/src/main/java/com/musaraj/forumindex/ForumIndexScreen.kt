@@ -85,6 +85,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -299,9 +300,9 @@ private fun ReaderHeader(onStars: () -> Unit, onSettings: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(Modifier.weight(1f).semantics { heading() }, verticalAlignment = Alignment.Bottom) {
-            Text("forum", color = MaterialTheme.colorScheme.onSurface, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-            Text("i", color = ReaderAccent, fontSize = 21.sp, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold)
-            Text("ndex", color = ReaderAccent, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text("forum", fontFamily = FontFamily.Default, color = MaterialTheme.colorScheme.onSurface, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text("i", fontFamily = FontFamily.Default, color = ReaderAccent, fontSize = 21.sp, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold)
+            Text("ndex", fontFamily = FontFamily.Default, color = ReaderAccent, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         }
         IconButton(onClick = onStars, modifier = Modifier.size(48.dp)) {
             Text("☆", fontSize = 28.sp, modifier = Modifier.semantics { contentDescription = "Starred topics" })

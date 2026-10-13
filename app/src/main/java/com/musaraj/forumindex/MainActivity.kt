@@ -129,7 +129,7 @@ internal fun ForumIndexTheme(dark: Boolean = false, content: @Composable () -> U
         background = background, surface = background, surfaceVariant = surface,
         onBackground = Color.Black, onSurface = Color.Black,
     )
-    MaterialTheme(colorScheme = scheme) {
+    MaterialTheme(colorScheme = scheme, typography = ForumIndexTypography) {
         Surface(modifier = Modifier.fillMaxSize(), color = background) { content() }
     }
 }

@@ -35,6 +35,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 The app reads the existing Forum Index public API, keeps feed caches in memory, and stores subject choices, opened topics, and stars locally. Topics from supported forums open in a native Markdown reader with paginated replies and a full-page toggle. Same-site links open another preview; Back restores the previous page and scroll position, while Share and Star follow the displayed page. Swipe between topics, then use Back or Close to return to the selected feed row. Scroll upward to reveal the topic title. Feed actions include About with an excerpt and community information. Hacker News and Lobsters discussion signals appear in feed rows with browser links in supported topic previews. Settings offer Auto, Light, and Dark appearance. Tap the forum header for site information. Devices automatically enroll with a generated contributor name; opting out in Settings persists across launches and keeps local stars. The contribution bearer token is encrypted with Android Keystore and excluded from backup. Android contributions are currently shown as device-unverified because server-side Android attestation is not implemented.
 
+## Typography
+
+The interface and native Markdown reader bundle Source Sans 3 from [Adobe's font repository](https://github.com/adobe-fonts/source-sans/tree/87b37a2daaed80fcb8e8ccb0085c4d72ddade12e), including regular, medium, semibold, bold, and their italics. The wordmark retains its original typeface. The SIL Open Font License is included in `app/src/main/assets/licenses/source-sans-3.txt`.
+
 ## Google Play release
 
 See [the release guide](docs/play-store-release.md) for upload signing, versioning, bundle builds, store materials, testing, and remaining Console requirements. Store listing drafts are in `store/`, alongside the [icon, feature graphic, and Android screenshot gallery](store/index.html). The [asset guide](store/README.md) explains uploads and regeneration; the [data inventory](docs/privacy-data-inventory.md) supports privacy-policy and Data safety preparation.
