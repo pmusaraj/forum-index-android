@@ -108,10 +108,10 @@ class ReaderUiTest {
             })
         }
         compose.onNodeWithContentDescription("Choose subjects").performClick()
-        compose.onNodeWithContentDescription("Move Main down").performClick()
+        compose.onNodeWithContentDescription("Move Trending down").performClick()
         compose.runOnIdle { assertEquals(listOf("parent:ai", "main-feed", "parent:sport"), updates) }
         compose.onNodeWithContentDescription("Toggle AI").performClick()
-        compose.onNodeWithContentDescription("Toggle Main").performClick()
+        compose.onNodeWithContentDescription("Toggle Trending").performClick()
         compose.runOnIdle { assertEquals(listOf("parent:sport"), updates) }
         compose.onNodeWithContentDescription("Toggle Sport").performClick()
         compose.onNodeWithContentDescription("Toggle Sport").assertIsOn()

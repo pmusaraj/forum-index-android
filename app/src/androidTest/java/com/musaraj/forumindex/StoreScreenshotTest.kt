@@ -93,7 +93,7 @@ class StoreScreenshotTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("forum-overview-forum-link").fetchSemanticsNodes().isNotEmpty() }
             capture("03-community")
             compose.runOnIdle { screen = "feed"; generation++ }
-            compose.onNodeWithContentDescription("Starred topics").performClick()
+            compose.onNodeWithContentDescription("Bookmarks").performClick()
             expandSheet()
             capture("04-starred")
             compose.runOnIdle { generation++ }

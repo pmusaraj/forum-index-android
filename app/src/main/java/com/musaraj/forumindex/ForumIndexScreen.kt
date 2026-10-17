@@ -123,6 +123,7 @@ internal fun ForumIndexReader(
     onOpenStarred: (StarredTopic) -> Unit = {},
     onRemoveStar: (StarredTopic) -> Unit = {},
     onSettings: () -> Unit = {},
+    onSendFeedback: (FeedbackSubmission, () -> Unit) -> Unit = { _, _ -> },
     defaultDeviceName: String = Build.MODEL,
     defaultDisplayName: String = "Reader",
     onEnroll: (String, String) -> Unit = { _, _ -> },
@@ -148,6 +149,7 @@ internal fun ForumIndexReader(
     }
 
     var subjectsOpen by rememberSaveable { mutableStateOf(false) }
+    var feedbackOpen by rememberSaveable { mutableStateOf(false) }
     var starsOpen by rememberSaveable { mutableStateOf(false) }
     var contributionOpen by rememberSaveable { mutableStateOf(false) }
     var explicitReportTopicId by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -172,6 +174,7 @@ internal fun ForumIndexReader(
     Column(Modifier.fillMaxSize().background(ReaderBackground)) {
         ReaderHeader(
             onStars = { starsOpen = true; onStars() },
+            unreadBookmarks = stars.any { it.hasUnreadReplies },
             onSettings = { contributionOpen = true; onSettings() },
         )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -265,11 +268,14 @@ internal fun ForumIndexReader(
         )
     }
     if (starsOpen) StarredSheet(stars, { starsOpen = false }, onOpenStarred, onRemoveStar)
+    if (feedbackOpen) FeedbackSheet(uiState.contribution.enrollment != null, uiState.sendingFeedback,
+        uiState.feedbackResult, onSendFeedback, { feedbackOpen = false })
     if (contributionOpen) ContributionSheet(
         state = uiState.contribution,
         defaultDeviceName = defaultDeviceName,
         defaultDisplayName = defaultDisplayName,
         onDismiss = { contributionOpen = false },
+        onFeedback = { contributionOpen = false; feedbackOpen = true },
         onEnroll = onEnroll,
         onRefresh = onRefreshContribution,
         onUpdateDevice = onUpdateDevice,
@@ -294,7 +300,7 @@ internal fun ForumIndexReader(
 }
 
 @Composable
-private fun ReaderHeader(onStars: () -> Unit, onSettings: () -> Unit) {
+private fun ReaderHeader(onStars: () -> Unit, onSettings: () -> Unit, unreadBookmarks: Boolean) {
     Row(
         Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp).testTag("reader-header"),
         verticalAlignment = Alignment.CenterVertically,
@@ -304,8 +310,8 @@ private fun ReaderHeader(onStars: () -> Unit, onSettings: () -> Unit) {
             Text("i", fontFamily = FontFamily.Default, color = ReaderAccent, fontSize = 21.sp, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold)
             Text("ndex", fontFamily = FontFamily.Default, color = ReaderAccent, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         }
-        IconButton(onClick = onStars, modifier = Modifier.size(48.dp)) {
-            Text("☆", fontSize = 28.sp, modifier = Modifier.semantics { contentDescription = "Starred topics" })
+        IconButton(onClick = onStars, modifier = Modifier.size(48.dp).semantics { contentDescription = if (unreadBookmarks) "Bookmarks, new replies" else "Bookmarks" }) {
+            BookmarkIcon(false, unreadBookmarks)
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -325,6 +331,7 @@ private fun ContributionSheet(
     onUpdateDevice: (String) -> Unit,
     onSubmitForum: (String) -> Boolean,
     onOptOut: () -> Unit,
+    onFeedback: () -> Unit = {},
 ) {
     val appearance = LocalAppearanceSettings.current
     var deviceName by rememberSaveable { mutableStateOf(defaultDeviceName.cappedLabel()) }
@@ -356,6 +363,7 @@ private fun ContributionSheet(
                 ) { Text("×", fontSize = 24.sp) }
             }
 
+            Button(onClick = onFeedback) { Text("Feedback") }
             Text("Appearance", fontWeight = FontWeight.SemiBold)
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().testTag("appearance-picker")) {
                 AppAppearance.entries.forEachIndexed { index, option ->
@@ -370,7 +378,7 @@ private fun ContributionSheet(
             Text("Auto follows your device’s appearance.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(20.dp))
             Text(
-                "This device enrolls automatically to improve recommendations. Reads, stars, and reports are linked to a generated contributor profile. You can opt out below.",
+                "This device enrolls automatically to improve recommendations. Reads, bookmarks, and reports are linked to a generated contributor profile. You can opt out below.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(20.dp))
@@ -461,9 +469,9 @@ private fun ContributionSheet(
 
             HorizontalDivider(Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
             Text("What is reported", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("Reads, star changes, and reports about low quality, inappropriate content, or the wrong subject.",
+            Text("Reads, bookmark changes, and reports about low quality, inappropriate content, or the wrong subject.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
-            Text("Opening a topic counts as a read. Activity is sent only while contributions are enabled. Your stars stay saved on this device.",
+            Text("Opening a topic counts as a read. Activity is sent only while contributions are enabled. Your bookmarks stay saved on this device.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 12.dp))
             if (installation != null) {
                 TextButton(
@@ -479,7 +487,7 @@ private fun ContributionSheet(
     if (confirmOptOut) AlertDialog(
         onDismissRequest = { confirmOptOut = false },
         title = { Text("Confirm opt out") },
-        text = { Text("Stop sending contribution actions? Your local stars will remain on this device.") },
+        text = { Text("Stop sending contribution actions? Your local bookmarks will remain on this device.") },
         dismissButton = {
             TextButton(onClick = { confirmOptOut = false }, modifier = Modifier.height(48.dp)) { Text("Keep contributions") }
         },
@@ -672,7 +680,7 @@ private fun TopicActions(
         text = {
             Column {
                 Button(onClick = onAbout, modifier = Modifier.testTag("topic-context-about")) { Text("About") }
-                if (canStar) Button(onClick = onToggleStar) { Text(if (starred) "Unstar" else "Star") }
+                if (canStar) Button(onClick = onToggleStar) { Text(if (starred) "Remove bookmark" else "Bookmark") }
                 Text("Report", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
                 Button(onClick = { onReport("low_quality") }) { Text("Low quality") }
                 Button(onClick = { onReport("inappropriate") }) { Text("Inappropriate") }
@@ -741,17 +749,19 @@ private fun StarredSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ReaderBackground) {
         Column(Modifier.fillMaxHeight(.82f).fillMaxWidth().padding(horizontal = 16.dp)) {
-            Text("Starred", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+            Text("Bookmarks", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+            Text("Your 20 most recently bookmarked topics are tracked for new replies.", Modifier.padding(vertical = 12.dp))
             if (stars.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No starred topics") }
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No bookmarks") }
             } else LazyColumn {
                 items(stars, key = { "${it.forumId}:${it.topicId}:${it.url}" }) { star ->
                     Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(
-                            Modifier.weight(1f).fillMaxHeight().clickable { onOpen(star) }
+                            Modifier.weight(1f).fillMaxHeight().clickable { onDismiss(); onOpen(star) }
                                 .testTag("starred-${star.forumId}-${star.topicId}").padding(vertical = 8.dp),
                             verticalArrangement = Arrangement.Center,
                         ) {
+                            if (star.hasUnreadReplies) Text("◐ New replies", color = MaterialTheme.colorScheme.onSurface)
                             Text(star.title, fontWeight = FontWeight.SemiBold, maxLines = 1)
                             Text(star.forumName, color = MaterialTheme.colorScheme.onSurface.copy(alpha = .58f), fontSize = 13.sp)
                         }
@@ -853,7 +863,8 @@ private fun StatusBanner(message: String) {
 }
 
 private fun Destination.label() = when (this) {
-    Destination.Main -> "Main"
+    Destination.ForYou -> "For You"
+    Destination.Main -> "Trending"
     is Destination.Subject -> when {
         subject.slug.equals("technology", ignoreCase = true) -> "Tech"
         subject.slug.equals("web-dev", ignoreCase = true) -> "Web Development"
@@ -863,6 +874,7 @@ private fun Destination.label() = when (this) {
 }
 
 private fun Destination.tabTag() = when (this) {
+    Destination.ForYou -> "for-you-feed"
     Destination.Main -> "main-feed"
     is Destination.Subject -> subject.slug
 }

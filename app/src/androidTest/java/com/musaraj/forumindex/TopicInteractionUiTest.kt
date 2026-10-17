@@ -33,10 +33,10 @@ class TopicInteractionUiTest {
     @Test fun viewerHasOnlyShareStarCloseChromeWithoutNetwork() {
         compose.setContent { TopicWebView(topic(), false, {}, {}, "<html><body>fixture</body></html>") }
         val share = compose.onNodeWithContentDescription("Share")
-        val star = compose.onNodeWithContentDescription("Star")
+        val star = compose.onNodeWithContentDescription("Bookmark")
         val close = compose.onNodeWithContentDescription("Close")
         compose.onAllNodesWithContentDescription("Share").assertCountEquals(1)
-        compose.onAllNodesWithContentDescription("Star").assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Bookmark").assertCountEquals(1)
         compose.onAllNodesWithContentDescription("Close").assertCountEquals(1)
         val shareBounds = share.fetchSemanticsNode().boundsInRoot
         val starBounds = star.fetchSemanticsNode().boundsInRoot
@@ -72,13 +72,13 @@ class TopicInteractionUiTest {
         }
         compose.onNodeWithTag("topic-10-1").performClick()
         compose.onNodeWithTag("topic-10-1").performTouchInput { longClick() }
-        compose.onNodeWithText("Star").assertDoesNotExist()
+        compose.onNodeWithText("Bookmark").assertDoesNotExist()
         compose.onNodeWithText("Low quality").assertIsDisplayed()
         compose.onNodeWithText("Low quality").performClick()
         compose.onNodeWithTag("topic-10-2").performTouchInput { longClick() }
-        compose.onNodeWithText("Star").performClick()
+        compose.onNodeWithText("Bookmark").performClick()
         compose.onNodeWithTag("topic-10-2").performTouchInput { longClick() }
-        compose.onNodeWithText("Unstar").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Remove bookmark").assertIsDisplayed().performClick()
         compose.runOnIdle { assertFalse(opened); assertFalse(validStarred) }
     }
 
@@ -144,13 +144,14 @@ class TopicInteractionUiTest {
                 onRemoveStar = { removed -> stars = stars.filterNot { it.forumId == removed.forumId && it.topicId == removed.topicId } },
             )
         }
-        compose.onNodeWithContentDescription("Starred topics").performClick()
-        compose.onNodeWithText("No starred topics").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Bookmarks").performClick()
+        compose.onNodeWithText("No bookmarks").assertIsDisplayed()
         compose.runOnIdle { stars = listOf(star()) }
         compose.onNodeWithTag("starred-10-1").performClick()
-        compose.runOnIdle { assertEquals(star(), opened) }
+        compose.runOnIdle { assertEquals(stars.single(), opened) }
+        compose.onNodeWithContentDescription("Bookmarks").performClick()
         compose.onNodeWithContentDescription("Remove Fixture topic").performClick()
-        compose.onNodeWithText("No starred topics").assertIsDisplayed()
+        compose.onNodeWithText("No bookmarks").assertIsDisplayed()
     }
 
     @Test fun settingsAndReportGateOpenTheSameEnrollmentSheet() {
@@ -201,7 +202,7 @@ class TopicInteractionUiTest {
         compose.onNodeWithTag("save-device-name").performClick()
         compose.runOnIdle { assertEquals("Tablet", renamed) }
         compose.onNodeWithText("What is reported").assertExists()
-        compose.onNodeWithText("Opening a topic counts as a read. Activity is sent only while contributions are enabled. Your stars stay saved on this device.").assertExists()
+        compose.onNodeWithText("Opening a topic counts as a read. Activity is sent only while contributions are enabled. Your bookmarks stay saved on this device.").assertExists()
         listOf("Device ID", "Public ID", "Apple", "Play Integrity", "ranking", "Up votes", "Down votes")
             .forEach { compose.onNodeWithText(it, substring = true, ignoreCase = true).assertDoesNotExist() }
         compose.runOnIdle {
@@ -233,7 +234,7 @@ class TopicInteractionUiTest {
             ui = ui.copy(contribution = ui.contribution.copy(enrollment = null))
         }
         compose.onNodeWithContentDescription("Close settings").performClick()
-        compose.onNodeWithContentDescription("Starred topics").performClick()
+        compose.onNodeWithContentDescription("Bookmarks").performClick()
         compose.onNodeWithTag("starred-10-1").assertIsDisplayed()
     }
 
@@ -245,7 +246,7 @@ class TopicInteractionUiTest {
 
         compose.onNodeWithText("Settings").assertIsDisplayed()
         compose.onNodeWithTag("appearance-picker").assertIsDisplayed()
-        compose.onNodeWithText("This device enrolls automatically to improve recommendations. Reads, stars, and reports are linked to a generated contributor profile. You can opt out below.").assertIsDisplayed()
+        compose.onNodeWithText("This device enrolls automatically to improve recommendations. Reads, bookmarks, and reports are linked to a generated contributor profile. You can opt out below.").assertIsDisplayed()
         compose.onNodeWithTag("forum-submission-url").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("submit-forum").assertIsDisplayed()
         compose.runOnIdle {

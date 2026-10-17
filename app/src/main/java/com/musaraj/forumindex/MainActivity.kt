@@ -1,5 +1,6 @@
 package com.musaraj.forumindex
 
+import androidx.lifecycle.repeatOnLifecycle
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -68,6 +69,15 @@ class MainActivity : ComponentActivity() {
                     val detailSession by model.detailSession.collectAsState()
                     val feedReturnTarget by model.feedReturnTarget.collectAsState()
                     LaunchedEffect(model) { model.launch(android.os.Build.MODEL) }
+                    LaunchedEffect(state.contribution.enrollment?.token) {
+                        if (state.contribution.enrollment != null) model.refreshEnrollment()
+                    }
+                    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+                    LaunchedEffect(model, lifecycle) {
+                        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                            while (true) { model.refreshBookmarkReplies(); kotlinx.coroutines.delay(300_000) }
+                        }
+                    }
                     Box(Modifier.safeDrawingPadding().then(if (detailSession != null) Modifier.clearAndSetSemantics { } else Modifier)) {
                         ForumIndexReader(
                             uiState = state,
@@ -91,14 +101,9 @@ class MainActivity : ComponentActivity() {
                             onUpdateDevice = { model.updateDevice(it) },
                             onSubmitForum = model::submitForum,
                             onOptOut = model::optOut,
-                            onOpenStarred = { star ->
-                                val url = try { validTopicUrl(URL(star.url)) } catch (_: Exception) { null }
-                                if (url != null) {
-                                    model.markOpened(star)
-                                    openExternalTopic(url, ::startActivity)
-                                }
-                            },
+                            onOpenStarred = model::openBookmark,
                             onRemoveStar = model::removeStar,
+                            onSendFeedback = model::submitFeedback,
                         )
                     }
                     detailSession?.let { session ->
