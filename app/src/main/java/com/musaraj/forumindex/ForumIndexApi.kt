@@ -53,12 +53,15 @@ data class Installation(
     val deviceName: String,
     val deviceVerified: Boolean,
     val trusted: Boolean,
+    val readCount: Int? = null,
+    val forYouEligible: Boolean = false,
 )
 data class Enrollment(val token: String, val installation: Installation)
 
 sealed interface Destination {
     val id: String
 
+    data object ForYou : Destination { override val id = "for-you-feed" }
     data object Main : Destination { override val id = "main-feed" }
     data class Subject(val subject: com.musaraj.forumindex.Subject) : Destination {
         override val id = "parent:${subject.slug}"
@@ -76,6 +79,7 @@ interface ForumIndexApi {
     fun deleteInstallation(token: String)
     fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String)
     fun submitForum(url: String, token: String)
+    fun submitFeedback(submission: FeedbackSubmission, token: String) { throw UnsupportedOperationException() }
 }
 
 sealed class ForumIndexApiException(message: String) : Exception(message) {
@@ -94,7 +98,7 @@ class HttpForumIndexApi(
     internal fun taxonomyUrl() = url("/api/v2/subjects", "window=5d&language=en")
     internal fun mainTopicsUrl(page: Int): URL {
         require(page > 0) { "page must be positive" }
-        return url("/api/v2/topics", "feed=main&limit=30&page=$page&language=en")
+        return url("/api/v2/topics", "feed=trending&limit=30&page=$page&language=en")
     }
     internal fun personalizedTopicsUrl(page: Int): URL {
         require(page > 0) { "page must be positive" }
@@ -122,7 +126,7 @@ class HttpForumIndexApi(
     }
 
     override fun fetchPersonalizedTopics(page: Int, token: String?): FeedEnvelope {
-        val body = request(personalizedTopicsUrl(page), "GET", token = token?.let(::checkedToken))
+        val body = request(personalizedTopicsUrl(page), "GET", token = checkedToken(requireNotNull(token)))
         return decode { ForumIndexJson.feed(body) }
     }
 
@@ -156,6 +160,11 @@ class HttpForumIndexApi(
             url("/api/v2/forum-submission"), "POST",
             JSONObject().put("url", url).toString(), checkedToken(token), forbiddenExpiresAccess = false,
         )
+    }
+
+    override fun submitFeedback(submission: FeedbackSubmission, token: String) {
+        require(submission.isValid)
+        request(url("/api/v2/feedback"), "POST", submission.toJson().toString(), checkedToken(token), forbiddenExpiresAccess = false)
     }
 
     override fun deleteInstallation(token: String) {
@@ -331,6 +340,7 @@ internal object ForumIndexJson {
     private fun JSONObject.installation() = Installation(
         getString("public_id"), getString("display_name"), getString("device_name"),
         optBoolean("device_verified", false), optBoolean("trusted", false),
+        if (isNull("read_count")) null else optInt("read_count"), optBoolean("for_you_eligible", false),
     )
 
     private fun JSONObject.optStringOrNull(key: String): String? =

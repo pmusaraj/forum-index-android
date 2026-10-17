@@ -213,7 +213,7 @@ internal fun TopicActions(topic: StarredTopic, starred: Boolean, onToggleStar: (
                 }, null))
             } catch (_: ActivityNotFoundException) { /* No share targets installed. */ }
         })
-        TopicControl(if (starred) "Unstar" else "Star", if (starred) "★" else "☆", onToggleStar, starred)
+        TopicControl(if (starred) "Remove bookmark" else "Bookmark", "", onToggleStar, starred)
         TopicControl("Close", "×", onDismiss)
     }
 }
@@ -225,9 +225,9 @@ private fun TopicControl(label: String, glyph: String, onClick: () -> Unit, star
         modifier = Modifier.size(48.dp).shadow(4.dp, CircleShape).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .94f), CircleShape)
             .semantics {
                 contentDescription = label
-                starred?.let { stateDescription = if (it) "Starred" else "Not starred" }
+                starred?.let { stateDescription = if (it) "Bookmarked" else "Not bookmarked" }
             },
-    ) { Text(glyph, fontSize = 24.sp, color = if (starred == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
+    ) { if (starred != null) BookmarkIcon(starred) else Text(glyph, fontSize = 24.sp) }
 }
 
 @SuppressLint("SetJavaScriptEnabled")

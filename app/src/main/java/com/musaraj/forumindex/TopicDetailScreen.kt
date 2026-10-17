@@ -225,6 +225,8 @@ private fun TopicArticle(
     reader: MarkdownTopicReader,
     onInternalLink: (URL) -> Boolean,
 ) {
+    var showsSummary by remember(reader) { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val listState = rememberLazyListState()
     val density = LocalDensity.current.density
     var titleHeight by remember { mutableStateOf(0) }
@@ -270,18 +272,36 @@ private fun TopicArticle(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.onSizeChanged { titleHeight = it.height }.semantics { heading() }.testTag("topic-preview-title"))
-                    val date = publishedAt?.let { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault()).format(it) }
-                    val details = listOfNotNull(date, replyCount?.let { "$it ${if (it == 1) "reply" else "replies"}" })
-                    if (details.isNotEmpty()) Text(details.joinToString(" · "),
-                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("topic-preview-details"))
+                    val firstPost = state.posts.firstOrNull().takeIf { state.startsTopic }
+                    TopicReaderMetadata(firstPost, publishedAt, state.summary != null, showsSummary) {
+                        showsSummary = !showsSummary
+                    }
                     if (externalSignals.isNotEmpty()) ExternalSignalLinks(externalSignals)
+                }
+            }
+            if (showsSummary && state.summary != null) item(key = "summary") {
+                Column(Modifier.background(MaterialTheme.colorScheme.surfaceVariant).padding(16.dp).testTag("topic-ai-summary")) {
+                    Text("AI-generated summary", modifier = Modifier.semantics { heading() })
+                    MarkdownPostBody(state.summary, renderer)
                 }
             }
             items(state.posts, key = { it.id }) { post ->
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
-                    if (post.username != null) PostAuthor(post)
+                    if (!state.startsTopic || post.id != state.posts.firstOrNull()?.id) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+                        if (post.username != null) PostAuthor(post)
+                    }
                     MarkdownPostBody(post.markdown, renderer) { renderedPosts[post.id] = true }
+                }
+            }
+            if (state.hasCompleteTopic) item(key = "footer") {
+                Column(verticalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.testTag("topic-reader-footer")) {
+                    HorizontalDivider()
+                    Text("You reached the end of topic: $title in ${state.baseUrl.host}")
+                    val totals = listOfNotNull((state.replyCount ?: replyCount)?.let { "$it ${if (it == 1) "reply" else "replies"}" },
+                        state.participantCount?.let { "$it ${if (it == 1) "participant" else "participants"}" })
+                    if (totals.isNotEmpty()) Text(totals.joinToString(" · "))
+                    Button(onClick = { openExternalTopic(state.baseUrl, context::startActivity) }) { Text("Open in browser") }
                 }
             }
             item(key = "pagination") {

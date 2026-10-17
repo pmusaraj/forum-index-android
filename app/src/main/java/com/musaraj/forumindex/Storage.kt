@@ -20,9 +20,21 @@ data class StarredTopic(
     val forumName: String,
     val topicId: Int? = null,
     val forumId: Int? = null,
-)
+    val addedAt: Long = System.currentTimeMillis(),
+    val lastReadAt: Long = addedAt,
+    val latestReplyAt: Long? = null,
+    val forum: ForumSummary? = null,
+    val publishedAt: java.time.Instant? = null,
+    val replyCount: Int = 0,
+    val externalSignals: List<ExternalSignal> = emptyList(),
+) {
+    val hasUnreadReplies get() = latestReplyAt?.let { it > lastReadAt } == true
+}
 
 interface PreferencesStore {
+    var forYouIntroduced: Boolean
+        get() = false
+        set(value) {}
     var visibleSubjectOrder: List<String>
     var stars: List<StarredTopic>
     var openedTopicIds: Set<String>
@@ -48,6 +60,10 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
         get() = preferences.getString("contributor_display_name", null)
         set(value) { preferences.edit().putString("contributor_display_name", value).apply() }
 
+    override var forYouIntroduced: Boolean
+        get() = preferences.getBoolean("for_you_introduced", false)
+        set(value) { preferences.edit().putBoolean("for_you_introduced", value).apply() }
+
     override var visibleSubjectOrder: List<String>
         get() = readArray(SUBJECTS) { getString(it) }
         set(value) = writeArray(SUBJECTS, JSONArray(value))
@@ -61,6 +77,19 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
                     it.getString("forum_name"),
                     if (it.isNull("topic_id")) null else it.getInt("topic_id"),
                     if (it.isNull("forum_id")) null else it.getInt("forum_id"),
+                    it.optLong("added_at", index.toLong()), it.optLong("last_read_at", System.currentTimeMillis()),
+                    if (it.isNull("latest_reply_at")) null else it.getLong("latest_reply_at"),
+                    it.optJSONObject("forum")?.let { f -> ForumSummary(f.getInt("id"), f.getString("name"), f.optString("slug"),
+                        f.optString("base_url").takeIf(String::isNotEmpty)?.let(::javaUrl),
+                        f.optString("icon_url").takeIf(String::isNotEmpty)?.let(::javaUrl), f.optBoolean("supports_markdown")) },
+                    runCatching { it.optString("published_at").takeIf(String::isNotEmpty)?.let(java.time.Instant::parse) }.getOrNull(),
+                    it.optInt("reply_count", 0),
+                    it.optJSONArray("external_signals")?.let { entries -> (0 until entries.length()).mapNotNull { i ->
+                        val entry = entries.optJSONObject(i) ?: return@mapNotNull null
+                        val source = ExternalSignalSource.entries.firstOrNull { source -> source.apiValue == entry.optString("source") }
+                        val url = javaUrl(entry.optString("url"))
+                        if (source != null && url != null) ExternalSignal(source, url) else null
+                    } }.orEmpty(),
                 )
             }
         }
@@ -70,6 +99,13 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
                 .put("url", star.url)
                 .put("forum_name", star.forumName)
                 .put("topic_id", star.topicId)
+                .put("published_at", star.publishedAt?.toString()).put("reply_count", star.replyCount)
+                .put("external_signals", JSONArray().also { signals -> star.externalSignals.forEach {
+                    signals.put(JSONObject().put("source", it.source.apiValue).put("url", it.url.toString()))
+                } })
+                .put("added_at", star.addedAt).put("last_read_at", star.lastReadAt).put("latest_reply_at", star.latestReplyAt)
+                .put("forum", star.forum?.let { f -> JSONObject().put("id", f.id).put("name", f.name).put("slug", f.slug)
+                    .put("base_url", f.baseUrl?.toString()).put("icon_url", f.iconUrl?.toString()).put("supports_markdown", f.supportsMarkdown) })
                 .also { if (star.forumId != null) it.put("forum_id", star.forumId) })
         } })
 
@@ -95,6 +131,8 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
     }
 
     override fun isOpened(forumId: Int, topicId: Int) = "$forumId:$topicId" in openedTopicIds
+
+    private fun javaUrl(value: String) = try { validTopicUrl(java.net.URL(value)) } catch (_: Exception) { null }
 
     private fun <T> readArray(key: String, value: JSONArray.(Int) -> T): List<T> {
         return try {
@@ -186,11 +224,12 @@ class SecureTokenStore(context: Context) : EnrollmentStore {
         .put("display_name", displayName)
         .put("device_name", deviceName)
         .put("device_verified", deviceVerified)
-        .put("trusted", trusted)
+        .put("trusted", trusted).put("read_count", readCount).put("for_you_eligible", forYouEligible)
 
     private fun JSONObject.installation() = Installation(
         getString("public_id"), getString("display_name"), getString("device_name"),
         getBoolean("device_verified"), getBoolean("trusted"),
+        if (isNull("read_count")) null else getInt("read_count"), optBoolean("for_you_eligible"),
     )
 
     private companion object {

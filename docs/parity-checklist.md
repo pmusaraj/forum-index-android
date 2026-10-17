@@ -126,3 +126,21 @@ Validation:
 - Pixel 6 / Android 13: initial full run 42/45 passed; corrected About sheet and bounded title gesture, then 14/14 targeted recent-feature and reader tests passed. All 45 distinct scenarios passed across these runs, including the existing WebView gesture test on rerun.
 - New coverage includes malformed/unknown discussion signals, bold and heading metadata, title direction thresholds/reset, About retry and explicit opening, accessible feed signals, and linked previews omitting source-topic signals.
 - Physical-device/TalkBack and live discussion-link verification were not performed.
+
+## October 15 changes (iOS 552a2d0)
+
+- [x] Public Trending and separately eligible For You, including saved tab choices and access invalidation
+- [x] Bookmark terminology/icons, newest-first saves, old-star migration, and internal reader reopening
+- [x] Foreground reply tracking for the newest 20 saves, persisted unread state, and read clearing
+- [x] Generated AI-summary parsing and expand/collapse control
+- [x] First-author byline and complete-topic footer with conservative totals
+- [x] Contributor feedback with persisted draft, Unicode limit, metadata, and retry identity
+- [x] Preserve Android verification behavior and exclude Apple-specific renderer/release changes
+
+Validation:
+
+- Final `testDebugUnitTest`: 91 passed, covering summary-envelope boundaries, incomplete pagination, participant totals, bookmark polling limits/throttling, internal bookmark reopening, feedback retry identity, eligibility/hiding, and cancelled-feed access cleanup.
+- Full `connectedDebugAndroidTest` passed on Pixel 9 / Android 15. The opt-in store screenshot exporter was skipped. New UI scenarios cover summary toggling, author attribution, footer/browser control, unread bookmarks, and bookmark-sheet dismissal; storage coverage includes legacy saves and persisted reader metadata.
+- After the final absolute-date and access-cleanup refinements, the two new UI tests passed again, and all JVM tests were rerun.
+- Debug and release APK assembly passed. Release lint: 0 errors, 33 warnings and 1 hint (including optional SharedPreferences KTX suggestions).
+- Live feedback submission, live forum reply polling, physical devices, and TalkBack were not exercised. Release assembly is unsigned unless upload-signing credentials are provided.
