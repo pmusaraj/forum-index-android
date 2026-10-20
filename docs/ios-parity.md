@@ -120,4 +120,4 @@ Reviewed the adjacent Apple repository through `e9f8254` (build 33), including `
 - Android startup now shows the website wordmark across the available width with a small progress indicator until the initial feed resolves. Both appearances are supported; errors expose Retry and later feed refreshes retain the reader UI.
 - Empty linked-preview metadata rows are omitted, retaining the existing isolation of source-topic metadata.
 
-Open-testing publication requires user approval after screenshot review. A local 1.0.4 release candidate was subsequently prepared; no distribution track has been changed.
+Following screenshot review and user approval, version 1.0.4 (10004) was published to GitHub, internal testing, and open testing (`beta`) on October 20.

@@ -77,9 +77,11 @@ References: [User data policy](https://support.google.com/googleplay/android-dev
 - Store text fits the title, short-description, and full-description character limits.
 - Device/UI tests were not run: no device or emulator was connected. Play-delivered and 16 KB device checks remain pending.
 
-## Prepared update: 1.0.4 (October 20, 2026)
+## Published update: 1.0.4 (October 20, 2026)
 
-Signed APK and AAB are prepared locally in `artifacts/release/1.0.4/`, with SHA-256 checksums and the existing release certificate verified. Version code is `10004`; the latest published GitHub release checked during preparation was `v1.0.3`. The intended open-testing API track is `beta`, already included in `PLAY_TEST_TRACKS`. No tag, upload, or testing-track publication has been performed; publication awaits user approval. Recheck available version codes before uploading.
+[Version 1.0.4](https://github.com/pmusaraj/forum-index-android/releases/tag/v1.0.4), code `10004`, is published with signed APK/AAB assets, checksums, and the existing release certificate. Release commit: `3d4141358544b90be12fc7cd14934d766c178c74`. The release workflow successfully uploaded to internal testing, and the [open-testing workflow](https://github.com/pmusaraj/forum-index-android/actions/runs/39477953523) committed the same bundle to `beta` after user approval. Google Play processing/review may still apply.
+
+The GitHub notes are published. Listing copy, screenshot files, and Play release-note text remain repository assets; the current testing workflow does not upload those store materials.
 
 English release notes: `store/release-notes/en-US/10004.txt`. Updated listing copy and phone/tablet Bookmarks screenshots replace the previous star terminology. The current publishing script does not upload listing copy or release-note files, so apply these explicitly when publishing. Tagging also triggers the configured automatic internal-testing workflow; open testing is a separate step after approval.
 

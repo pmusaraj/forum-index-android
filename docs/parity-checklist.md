@@ -154,4 +154,4 @@ Validation:
 - [x] Light/dark full-width startup wordmark until the initial feed resolves; preserve Retry and later refresh UI
 - [x] Omit empty linked-preview metadata rows
 
-Validation: 95 JVM tests passed. The full Pixel 9 / Android 15 suite passed 50 tests with one opt-in store exporter skipped. Release lint passed with 0 errors, 33 warnings, and 1 hint. Review screenshots use production composables with deterministic fixture data; live nickname updates were not submitted to the production server. Screenshots cover loading, Settings, and regenerated nicknames in both appearances. Open-testing release remains pending user approval.
+Validation: 95 JVM tests passed. The full Pixel 9 / Android 15 suite passed 50 tests with one opt-in store exporter skipped. Release lint passed with 0 errors, 33 warnings, and 1 hint. Review screenshots use production composables with deterministic fixture data; live nickname updates were not submitted to the production server. Screenshots cover loading, Settings, and regenerated nicknames in both appearances. Version 1.0.4 (10004) was subsequently published to open testing after user approval on October 20.
