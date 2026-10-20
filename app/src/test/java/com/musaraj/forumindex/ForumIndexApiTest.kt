@@ -126,6 +126,20 @@ class ForumIndexApiTest {
         assertEquals(403, error.status)
     }
 
+    @Test fun nicknameUpdateOnlyPatchesDisplayName() {
+        lateinit var call: FakeConnection
+        val api = HttpForumIndexApi(connectionFactory = {
+            FakeConnection(it, """{"installation":{"public_id":"A1","display_name":"DancingOtter42","device_name":"Phone","device_verified":false,"trusted":true}}""").also { connection -> call = connection }
+        })
+        val result = api.updateDisplayName("DancingOtter42", "token")
+        assertEquals("DancingOtter42", result.displayName)
+        assertEquals("Phone", result.deviceName)
+        assertEquals("PATCH", call.requestMethod)
+        assertEquals("/api/v2/installation", call.url.path)
+        assertEquals(mapOf("display_name" to "DancingOtter42"), call.sentJson())
+        assertEquals("Bearer token", call.headers["Authorization"])
+    }
+
     @Test fun contributionRequestsUseExactMethodsPathsBodiesAndHeaders() {
         val calls = mutableListOf<FakeConnection>()
         val responses = ArrayDeque(listOf(

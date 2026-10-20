@@ -9,7 +9,7 @@ Open [the review gallery](index.html) to inspect the artwork and all screenshot 
 | Phone screenshots | `screenshots/phone/light/` or `dark/` | 1080 × 1920 |
 | Tablet screenshots | `screenshots/tablet/light/` or `dark/` | 1600 × 2560 |
 
-Upload the five numbered screenshots in order: discover, reader, community, starred, subjects. Choose one appearance per device category, or mix up to eight images. The tablet set was captured on a Pixel Tablet emulator and is intended for the large-tablet listing field. No separate 7-inch-device capture is included.
+Upload the five numbered screenshots in order: discover, reader, community, bookmarks, subjects. Choose one appearance per device category, or mix up to eight images. The tablet set was captured on a Pixel Tablet emulator and is intended for the large-tablet listing field. No separate 7-inch-device capture is included.
 
 The icon preserves the original edge-cropped typographic design, without adding rounded corners or a shadow. The feature graphic uses the original wordmark, cream background, and teal accent. Standalone transparent wordmarks are in `graphics/logo-light.png` and `graphics/logo-dark.png`; editable originals are in `graphics/source/`.
 

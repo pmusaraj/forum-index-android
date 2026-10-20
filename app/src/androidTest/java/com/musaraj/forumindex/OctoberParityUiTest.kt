@@ -43,6 +43,7 @@ class OctoberParityUiTest {
             ForumIndexTheme {
                 ForumIndexReader(UiState(taxonomy = TaxonomyState.Loaded(emptyList()),
                     visibleDestinations = listOf(Destination.Main), selectedDestination = Destination.Main,
+                    feeds = mapOf(Destination.Main.id to FeedState.Empty),
                     contribution = ContributionState(loading = false)), stars = listOf(bookmark), onOpenStarred = { opened = it })
             }
         }

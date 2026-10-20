@@ -327,7 +327,7 @@ class ForumIndexViewModelTest {
         val success = viewModel(FakeApi(), tokens = store)
         advanceUntilIdle()
         assertTrue(success.enroll(" Name ", " 📱 ")); advanceUntilIdle()
-        assertEquals(enrollment(), store.value)
+        assertEquals(enrollment().let { it.copy(installation = it.installation.copy(deviceName = "📱")) }, store.value)
     }
 
     @Test fun tokenLoadAndSaveUseBlockingRunnerButDeleteIsImmediate() = runTest(dispatcher.scheduler) {
@@ -612,6 +612,57 @@ class ForumIndexViewModelTest {
         assertEquals(listOf("same-request", "same-request"), api.feedbackIds)
     }
 
+    @Test fun nicknameRegenerationPreservesIdentityAndPersistsAcceptedName() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val prefs = MemoryPreferences()
+        val tokens = MemoryTokenStore(enrollment())
+        val vm = viewModel(api, prefs, tokens)
+        advanceUntilIdle()
+        val before = vm.uiState.value.contribution.enrollment!!
+        assertTrue(vm.regenerateNickname())
+        assertFalse(vm.regenerateNickname())
+        advanceUntilIdle()
+        val after = vm.uiState.value.contribution.enrollment!!
+        assertNotEquals(before.installation.displayName, after.installation.displayName)
+        assertEquals(before.installation.copy(displayName = after.installation.displayName), after.installation)
+        assertEquals(before.token, after.token)
+        assertEquals(after, tokens.value)
+        assertEquals(after.installation.displayName, prefs.contributorDisplayName)
+        assertEquals(prefs.contributorDisplayName, viewModel(api, prefs, tokens).defaultDisplayName)
+    }
+
+    @Test fun nicknameFailureAndRejectedResponseKeepPreviousName() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val prefs = MemoryPreferences()
+        val tokens = MemoryTokenStore(enrollment())
+        val vm = viewModel(api, prefs, tokens)
+        advanceUntilIdle()
+        val before = tokens.value
+        for (failure in listOf(true, false)) {
+            api.nicknameFailure = failure
+            api.rejectNickname = !failure
+            vm.regenerateNickname(); advanceUntilIdle()
+            assertEquals(before, tokens.value)
+            assertEquals(before!!.installation.displayName, prefs.contributorDisplayName)
+            assertEquals("Couldn’t update nickname. Try again.", vm.uiState.value.contribution.error)
+        }
+    }
+
+    @Test fun optedOutNicknamePersistsWithoutEnrollmentAndLegacyNamesAreKept() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val prefs = MemoryPreferences().apply { contributorDisplayName = "Reader-12345678"; contributionsOptedOut = true }
+        val vm = viewModel(api, prefs)
+        advanceUntilIdle()
+        assertEquals("Reader-12345678", vm.defaultDisplayName)
+        vm.regenerateNickname(); advanceUntilIdle()
+        assertNotEquals("Reader-12345678", vm.defaultDisplayName)
+        assertEquals(vm.defaultDisplayName, vm.uiState.value.contribution.nickname)
+        assertEquals(vm.defaultDisplayName, viewModel(api, prefs).defaultDisplayName)
+        assertTrue(prefs.contributionsOptedOut)
+        assertNull(vm.uiState.value.contribution.enrollment)
+        assertTrue(api.calls.isEmpty())
+    }
+
     @Test fun automaticEnrollmentWaitsForStorageAndUsesStableGeneratedIdentity() = runTest(dispatcher.scheduler) {
         val api = FakeApi()
         val prefs = MemoryPreferences(deviceNameOverride = "My tablet")
@@ -621,7 +672,7 @@ class ForumIndexViewModelTest {
         vm.launch("Detected phone")
         advanceUntilIdle()
         val name = prefs.contributorDisplayName!!
-        assertTrue(name.startsWith("Reader-"))
+        assertTrue(name.matches(Regex("[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}")))
         assertEquals(listOf("create:$name:My tablet"), api.calls.filter { it.startsWith("create:") })
         assertNotNull(vm.uiState.value.contribution.enrollment)
         assertEquals(name, vm.defaultDisplayName)
@@ -766,9 +817,16 @@ class ForumIndexViewModelTest {
             return mainFeeds.removeFirstOrNull() ?: feed()
         }
         override fun fetchSubjectTopics(slug: String, page: Int): FeedEnvelope { calls += "subject:$slug:$page"; return feed(topic(slug.hashCode())) }
-        override fun createInstallation(displayName: String, deviceName: String): Enrollment { calls += "create:$displayName:$deviceName"; if (createFailure) throw ForumIndexApiException.Transport(); return enrollment() }
+        override fun createInstallation(displayName: String, deviceName: String): Enrollment { calls += "create:$displayName:$deviceName"; if (createFailure) throw ForumIndexApiException.Transport(); return enrollment().let { it.copy(installation = it.installation.copy(displayName = displayName, deviceName = deviceName)) } }
         override fun fetchInstallation(token: String): Installation { calls += "fetch:$token"; if (expireFetch) throw ForumIndexApiException.ExpiredAccess(); return enrollment(token).installation }
         override fun updateInstallation(deviceName: String, token: String): Installation { calls += "update:$deviceName"; return enrollment(token).installation.copy(deviceName = deviceName) }
+        var nicknameFailure = false
+        var rejectNickname = false
+        override fun updateDisplayName(displayName: String, token: String): Installation {
+            calls += "nickname:$displayName"
+            if (nicknameFailure) throw ForumIndexApiException.Transport()
+            return enrollment(token).installation.let { if (rejectNickname) it else it.copy(displayName = displayName) }
+        }
         override fun submitForum(url: String, token: String) { calls += "submit:$url:$token" }
         override fun deleteInstallation(token: String) {
             calls += "delete:$token"

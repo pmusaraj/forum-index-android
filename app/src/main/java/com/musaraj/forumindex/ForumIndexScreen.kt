@@ -84,6 +84,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -128,11 +129,23 @@ internal fun ForumIndexReader(
     defaultDisplayName: String = "Reader",
     onEnroll: (String, String) -> Unit = { _, _ -> },
     onRefreshContribution: () -> Unit = {},
-    onUpdateDevice: (String) -> Unit = {},
+    onRegenerateNickname: () -> Unit = {},
     onSubmitForum: (String) -> Boolean = { false },
     onOptOut: () -> Unit = {},
 ) {
     val visible = uiState.visibleDestinations
+    var startupComplete by rememberSaveable { mutableStateOf(false) }
+    val initialFeed = uiState.selectedDestination?.let { uiState.feeds[it.id] }
+    val startupLoading = uiState.taxonomy !is TaxonomyState.Error &&
+        (visible.isEmpty() || initialFeed == null || initialFeed is FeedState.Initial ||
+            (initialFeed is FeedState.Refreshing && initialFeed.rows.isEmpty()))
+    LaunchedEffect(startupLoading) {
+        if (!startupLoading) startupComplete = true
+    }
+    if (!startupComplete && startupLoading) {
+        StartupLoadingScreen()
+        return
+    }
     if (visible.isEmpty()) {
         Box(Modifier.fillMaxSize().background(ReaderBackground), contentAlignment = Alignment.Center) {
             if (uiState.taxonomy is TaxonomyState.Error) {
@@ -273,12 +286,12 @@ internal fun ForumIndexReader(
     if (contributionOpen) ContributionSheet(
         state = uiState.contribution,
         defaultDeviceName = defaultDeviceName,
-        defaultDisplayName = defaultDisplayName,
+        defaultDisplayName = uiState.contribution.nickname ?: defaultDisplayName,
         onDismiss = { contributionOpen = false },
         onFeedback = { contributionOpen = false; feedbackOpen = true },
         onEnroll = onEnroll,
         onRefresh = onRefreshContribution,
-        onUpdateDevice = onUpdateDevice,
+        onRegenerateNickname = onRegenerateNickname,
         onSubmitForum = onSubmitForum,
         onOptOut = onOptOut,
     )
@@ -328,20 +341,16 @@ private fun ContributionSheet(
     onDismiss: () -> Unit,
     onEnroll: (String, String) -> Unit,
     onRefresh: () -> Unit,
-    onUpdateDevice: (String) -> Unit,
+    onRegenerateNickname: () -> Unit,
     onSubmitForum: (String) -> Boolean,
     onOptOut: () -> Unit,
     onFeedback: () -> Unit = {},
 ) {
     val appearance = LocalAppearanceSettings.current
-    var deviceName by rememberSaveable { mutableStateOf(defaultDeviceName.cappedLabel()) }
     var confirmOptOut by rememberSaveable { mutableStateOf(false) }
     var forumURL by rememberSaveable { mutableStateOf("") }
     val installation = state.enrollment?.installation
 
-    LaunchedEffect(installation?.deviceName) {
-        if (installation != null) deviceName = installation.deviceName.cappedLabel()
-    }
     LaunchedEffect(state.forumSubmissionMessage) {
         if (state.forumSubmissionMessage == "Forum submitted for review.") forumURL = ""
     }
@@ -363,6 +372,18 @@ private fun ContributionSheet(
                 ) { Text("×", fontSize = 24.sp) }
             }
 
+            Text("What is this app?", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(
+                        "https://www.theforumindex.com",
+                        androidx.compose.ui.text.TextLinkStyles(style = androidx.compose.ui.text.SpanStyle(color = ReaderAccent)),
+                    )) { append("The Forum Index") }
+                    append(" is an app that lets you quickly scan forum topics across 1000+ Discourse forums. It lets you read, bookmark and flag topics. It uses the Markdown output of topics (where supported) for a fast read-only interface.")
+                },
+                modifier = Modifier.testTag("settings-app-description"),
+            )
+            Spacer(Modifier.height(20.dp))
             Button(onClick = onFeedback) { Text("Feedback") }
             Text("Appearance", fontWeight = FontWeight.SemiBold)
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().testTag("appearance-picker")) {
@@ -387,18 +408,9 @@ private fun ContributionSheet(
                 Text("Enable contributions", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text("Contribute actions from this device to improve topic ranking.")
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = deviceName,
-                    onValueChange = { deviceName = it.cappedLabel() },
-                    label = { Text("Device name") },
-                    singleLine = true,
-                    enabled = !state.loading,
-                    modifier = Modifier.fillMaxWidth().testTag("device-name"),
-                    supportingText = { Text("Required · 100 characters maximum") },
-                )
                 Button(
-                    onClick = { onEnroll(defaultDisplayName, deviceName.trim()) },
-                    enabled = !state.loading && deviceName.validLabel(),
+                    onClick = { onEnroll(defaultDisplayName, defaultDeviceName.trim()) },
+                    enabled = !state.loading,
                     modifier = Modifier.fillMaxWidth().height(48.dp).testTag("enable-contributions"),
                 ) { Text(if (state.loading) "Enabling…" else "Enable contributions") }
             } else {
@@ -409,22 +421,21 @@ private fun ContributionSheet(
                     enabled = !state.loading && !state.submittingForum,
                     modifier = Modifier.height(48.dp).testTag("refresh-contribution-status"),
                 ) { Text("Refresh status") }
-                OutlinedTextField(
-                    value = deviceName,
-                    onValueChange = { deviceName = it.cappedLabel() },
-                    label = { Text("Device name") },
-                    singleLine = true,
-                    enabled = !state.loading && !state.submittingForum,
-                    modifier = Modifier.fillMaxWidth().testTag("contribution-device-name"),
-                    supportingText = { Text("Required · 100 characters maximum") },
-                )
-                Button(
-                    onClick = { onUpdateDevice(deviceName.trim()) },
-                    enabled = !state.loading && !state.submittingForum && deviceName.validLabel() && deviceName.trim() != installation.deviceName,
-                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("save-device-name"),
-                ) { Text("Save device name") }
-                Text("Detected automatically. You can use any name you prefer.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+
+            Spacer(Modifier.height(16.dp))
+            Text("Device", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("Device name", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            Text(installation?.displayName ?: defaultDisplayName, Modifier.testTag("contribution-device-name"))
+            TextButton(
+                onClick = onRegenerateNickname,
+                enabled = !state.loading && !state.submittingForum,
+                modifier = Modifier.height(48.dp).testTag("regenerate-device-name"),
+            ) { Text("Generate new name", fontSize = 14.sp) }
+            Text(
+                "App admins use this nickname to identify your contributions. They can promote you to a trusted contributor, giving your activity more weight in topic rankings.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             if (installation?.trusted == true) {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
@@ -499,11 +510,6 @@ private fun ContributionSheet(
         },
     )
 }
-
-private fun String.validLabel() = trim().let { it.isNotEmpty() && it.codePointCount(0, it.length) <= CONTRIBUTION_LABEL_MAX }
-
-private fun String.cappedLabel(): String = if (codePointCount(0, length) <= CONTRIBUTION_LABEL_MAX) this
-else substring(0, offsetByCodePoints(0, CONTRIBUTION_LABEL_MAX))
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -881,4 +887,3 @@ private fun Destination.tabTag() = when (this) {
 
 private const val MAX_ICON_BYTES = 256 * 1024L
 private const val MAX_ICON_DIMENSION = 1024
-private const val CONTRIBUTION_LABEL_MAX = 100

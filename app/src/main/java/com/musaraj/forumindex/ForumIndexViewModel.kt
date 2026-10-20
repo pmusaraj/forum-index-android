@@ -58,6 +58,7 @@ data class ContributionState(
     val loading: Boolean = true,
     val error: String? = null,
     val reports: Map<Int, ReportState> = emptyMap(),
+    val nickname: String? = null,
     val submittingForum: Boolean = false,
     val forumSubmissionMessage: String? = null,
 )
@@ -165,7 +166,7 @@ class ForumIndexViewModel(
 
     private var automaticEnrollmentDevice: String? = null
     val defaultDisplayName: String
-        get() = preferences.contributorDisplayName ?: "Reader-${java.util.UUID.randomUUID().toString().take(8)}".also {
+        get() = preferences.contributorDisplayName ?: DeviceNickname.generate().also {
             preferences.contributorDisplayName = it
         }
 
@@ -458,6 +459,40 @@ class ForumIndexViewModel(
         }
     }
 
+    fun regenerateNickname(): Boolean {
+        val state = mutableUiState.value.contribution
+        if (state.loading || state.submittingForum) return false
+        val currentName = state.enrollment?.installation?.displayName ?: defaultDisplayName
+        val name = generateSequence { DeviceNickname.generate() }.first { it != currentName }
+        val enrollment = state.enrollment
+        if (enrollment == null) {
+            preferences.contributorDisplayName = name
+            mutableUiState.value = mutableUiState.value.copy(
+                contribution = state.copy(nickname = name, error = null),
+            )
+            return true
+        }
+        val generation = ++contributionGeneration
+        contributionLoading()
+        viewModelScope.launch {
+            try {
+                val installation = calls.run { api.updateDisplayName(name, enrollment.token) }
+                if (!contributionMatches(generation, enrollment.token)) return@launch
+                check(installation.displayName == name) { "Nickname was not saved" }
+                val updated = enrollment.copy(installation = installation)
+                calls.run { tokenStore.save(updated) }
+                if (contributionMatches(generation, enrollment.token)) contributionSuccess(updated)
+            } catch (_: ForumIndexApiException.ExpiredAccess) {
+                expireEnrollment(generation, enrollment.token)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (contributionMatches(generation, enrollment.token)) contributionFailure("Couldn’t update nickname. Try again.")
+            }
+        }
+        return true
+    }
+
     fun updateDevice(deviceName: String): Boolean {
         val device = validLabel(deviceName) ?: return false
         if (mutableUiState.value.contribution.loading || mutableUiState.value.contribution.submittingForum) return false
@@ -695,10 +730,12 @@ class ForumIndexViewModel(
 
     private fun contributionSuccess(enrollment: Enrollment?) {
         val old = mutableUiState.value.contribution.enrollment
+        enrollment?.installation?.displayName?.let { preferences.contributorDisplayName = it }
 
         mutableUiState.value = mutableUiState.value.copy(
             contribution = mutableUiState.value.contribution.copy(
                 enrollment = enrollment, loading = false, error = null, submittingForum = false,
+                nickname = preferences.contributorDisplayName,
             ),
         )
         syncEligibility(old, enrollment)
@@ -715,10 +752,10 @@ class ForumIndexViewModel(
         }
     }
 
-    private fun contributionFailure() {
+    private fun contributionFailure(message: String = REQUEST_FAILED) {
         mutableUiState.value = mutableUiState.value.copy(
             contribution = mutableUiState.value.contribution.copy(
-                loading = false, error = REQUEST_FAILED, submittingForum = false,
+                loading = false, error = message, submittingForum = false,
             ),
         )
     }

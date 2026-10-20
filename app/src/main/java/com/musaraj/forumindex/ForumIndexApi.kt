@@ -76,6 +76,7 @@ interface ForumIndexApi {
     fun createInstallation(displayName: String, deviceName: String): Enrollment
     fun fetchInstallation(token: String): Installation
     fun updateInstallation(deviceName: String, token: String): Installation
+    fun updateDisplayName(displayName: String, token: String): Installation { throw UnsupportedOperationException() }
     fun deleteInstallation(token: String)
     fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String)
     fun submitForum(url: String, token: String)
@@ -150,6 +151,15 @@ class HttpForumIndexApi(
         val body = request(
             url("/api/v2/installation"), "PATCH",
             JSONObject().put("device_name", deviceName).toString(), checkedToken(token),
+        )
+        return decode { ForumIndexJson.installationEnvelope(body) }
+    }
+
+    override fun updateDisplayName(displayName: String, token: String): Installation {
+        require(displayName.isNotBlank() && displayName.codePointCount(0, displayName.length) <= 100)
+        val body = request(
+            url("/api/v2/installation"), "PATCH",
+            JSONObject().put("display_name", displayName).toString(), checkedToken(token),
         )
         return decode { ForumIndexJson.installationEnvelope(body) }
     }

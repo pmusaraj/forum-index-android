@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
                             onReport = { topic, kind -> model.report(topic.id, kind, true) },
                             onEnroll = { displayName, deviceName -> model.enroll(displayName, deviceName) },
                             onRefreshContribution = model::refreshEnrollment,
-                            onUpdateDevice = { model.updateDevice(it) },
+                            onRegenerateNickname = { model.regenerateNickname() },
                             onSubmitForum = model::submitForum,
                             onOptOut = model::optOut,
                             onOpenStarred = model::openBookmark,

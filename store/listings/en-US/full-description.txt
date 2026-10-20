@@ -1,12 +1,12 @@
 Discover conversations across Discourse communities with Forum Index.
 
-Browse recent discussions in the main feed, choose the subjects you want to follow, and arrange your subject tabs. Open topics in the app, share a discussion, or save it to your starred list for later.
+Browse recent discussions in the Trending feed, choose the subjects you want to follow, and arrange your subject tabs. Open topics in the app, share a discussion, or save it to your bookmarks for later.
 
 Features:
 • Browse discussions across multiple forums.
 • Customize and reorder your subject tabs.
-• Save starred topics on your device.
+• Save bookmarked topics on your device.
 • Read topics in the built-in viewer or open them externally.
-• Personalize your main feed through reading, starring, and topic reports, with persistent opt-out in Settings.
+• Unlock For You recommendations through reading, bookmarking, and topic reports, with persistent opt-out in Settings.
 
-Your device automatically enrolls with a generated contributor name. You can opt out in Settings and continue browsing; saved stars stay on your device. Choose Auto, Light, or Dark appearance. An internet connection is required to load feeds and forum pages.
+Your device automatically enrolls with a persistent friendly nickname. You can opt out in Settings and continue browsing; saved bookmarks stay on your device. Generate a new nickname in Settings and choose Auto, Light, or Dark appearance. An internet connection is required to load feeds and forum pages.

@@ -1,0 +1,5 @@
+• New full-width loading logo in light and dark modes.
+• Friendly device nicknames with an option to generate a new name.
+• Settings introduction with a link to The Forum Index website.
+• Consistent bookmark wording throughout the app and store listing.
+• Improved linked-topic previews.

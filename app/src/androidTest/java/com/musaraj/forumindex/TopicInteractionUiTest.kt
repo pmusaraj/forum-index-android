@@ -164,7 +164,7 @@ class TopicInteractionUiTest {
         compose.onNodeWithTag("enable-contributions").performScrollTo().assertIsDisplayed()
     }
 
-    @Test fun enrollmentValidatesCodePointsAndSubmitsTrimmedValues() {
+    @Test fun enrollmentUsesSavedNicknameAndDetectedDevice() {
         var submitted: Pair<String, String>? = null
         compose.setContent {
             ForumIndexReader(
@@ -175,43 +175,37 @@ class TopicInteractionUiTest {
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithTag("enable-contributions").performScrollTo().assertIsEnabled()
         compose.onNodeWithTag("display-name").assertDoesNotExist()
-        compose.onNodeWithTag("device-name").performTextClearance()
-        compose.onNodeWithTag("device-name").performTextInput("😀".repeat(101))
-        compose.onNodeWithTag("device-name").assertTextContains("😀".repeat(100))
-        compose.onNodeWithTag("device-name").performTextClearance()
-        compose.onNodeWithTag("enable-contributions").assertIsNotEnabled()
-        compose.onNodeWithTag("device-name").performTextInput("  Pixel  ")
+        compose.onNodeWithTag("device-name").assertDoesNotExist()
         compose.onNodeWithTag("enable-contributions").performClick()
-        compose.runOnIdle { assertEquals("Reader-fixture" to "Pixel", submitted) }
+        compose.runOnIdle { assertEquals("Reader-fixture" to "Test phone", submitted) }
     }
 
     @Test fun contributorStatusRenameAndTransparencyUseNeutralExactCopy() {
-        var renamed: String? = null
+        var regenerated = 0
         var refreshed = 0
         var ui by mutableStateOf(state(listOf(topic()), enrolled = true))
         compose.setContent {
-            ForumIndexReader(ui, onRefreshContribution = { refreshed++ }, onUpdateDevice = { renamed = it })
+            ForumIndexReader(ui, onRefreshContribution = { refreshed++ }, onRegenerateNickname = { regenerated++ })
         }
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Public contributor").assertIsDisplayed()
+        compose.onNodeWithText("Public contributor").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Device unverified").assertIsDisplayed()
         compose.onNodeWithText("Refresh status").performClick()
         compose.runOnIdle { assertEquals(1, refreshed) }
-        compose.onNodeWithTag("contribution-device-name").performTextClearance()
-        compose.onNodeWithTag("contribution-device-name").performTextInput("  Tablet  ")
-        compose.onNodeWithTag("save-device-name").performClick()
-        compose.runOnIdle { assertEquals("Tablet", renamed) }
+        compose.onNodeWithTag("regenerate-device-name").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, regenerated) }
+        compose.onNodeWithTag("save-device-name").assertDoesNotExist()
         compose.onNodeWithText("What is reported").assertExists()
         compose.onNodeWithText("Opening a topic counts as a read. Activity is sent only while contributions are enabled. Your bookmarks stay saved on this device.").assertExists()
-        listOf("Device ID", "Public ID", "Apple", "Play Integrity", "ranking", "Up votes", "Down votes")
+        listOf("Device ID", "Public ID", "Apple", "Play Integrity", "Up votes", "Down votes")
             .forEach { compose.onNodeWithText(it, substring = true, ignoreCase = true).assertDoesNotExist() }
         compose.runOnIdle {
             val enrollment = ui.contribution.enrollment!!
             ui = ui.copy(contribution = ui.contribution.copy(enrollment = enrollment.copy(
-                installation = enrollment.installation.copy(trusted = true, deviceVerified = true, deviceName = "Server name"),
+                installation = enrollment.installation.copy(trusted = true, deviceVerified = true, displayName = "Server name"),
             )))
         }
-        compose.onNodeWithText("Trusted contributor").assertIsDisplayed()
+        compose.onNodeWithText("Trusted contributor").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Device verified").assertIsDisplayed()
         compose.onNodeWithTag("contribution-device-name").assertTextContains("Server name")
     }

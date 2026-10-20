@@ -31,6 +31,7 @@ internal fun TopicReaderMetadata(
     showsSummary: Boolean,
     onToggleSummary: () -> Unit,
 ) {
+    if (post?.username == null && publishedAt == null && post?.publishedAt == null && !hasSummary) return
     // Fit both controls on one line when possible, matching iOS's ViewThatFits.
     // Otherwise keep the summary control trailing on a separate line.
     Layout(modifier = Modifier.fillMaxWidth().testTag("topic-preview-details"), content = {
