@@ -92,6 +92,7 @@ sealed class ForumIndexApiException(message: String) : Exception(message) {
 
 class HttpForumIndexApi(
     baseUrl: String = PRODUCTION_BASE_URL,
+    private val devBuild: Boolean = BuildConfig.DEBUG,
     private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
 ) : ForumIndexApi {
     private val base = validateBase(baseUrl)
@@ -137,20 +138,36 @@ class HttpForumIndexApi(
     }
 
     override fun createInstallation(displayName: String, deviceName: String): Enrollment {
-        val body = JSONObject().put("display_name", displayName).put("device_name", deviceName)
+        val body = JSONObject().put("display_name", displayName).put("device_name", installationDeviceName(deviceName))
         val response = request(url("/api/v2/installations"), "POST", body = body.toString())
         return decode { ForumIndexJson.enrollment(response) }
     }
 
     override fun fetchInstallation(token: String): Installation {
         val body = request(url("/api/v2/installation"), "GET", token = checkedToken(token))
-        return decode { ForumIndexJson.installationEnvelope(body) }
+        val installation = decode { ForumIndexJson.installationEnvelope(body) }
+        if (installationDeviceName(installation.deviceName) == installation.deviceName) return installation
+        // Backfill older debug installations without making reads depend on a metadata update.
+        return try {
+            updateInstallation(installation.deviceName, token)
+        } catch (e: ForumIndexApiException.ExpiredAccess) {
+            throw e
+        } catch (_: ForumIndexApiException) {
+            installation // Retry on the next installation refresh.
+        }
+    }
+
+    private fun installationDeviceName(name: String): String {
+        if (!devBuild || name.startsWith("[dev] ")) return name
+        // The API limits labels to 100 Unicode code points, including the marker.
+        val end = name.offsetByCodePoints(0, minOf(94, name.codePointCount(0, name.length)))
+        return "[dev] " + name.substring(0, end)
     }
 
     override fun updateInstallation(deviceName: String, token: String): Installation {
         val body = request(
             url("/api/v2/installation"), "PATCH",
-            JSONObject().put("device_name", deviceName).toString(), checkedToken(token),
+            JSONObject().put("device_name", installationDeviceName(deviceName)).toString(), checkedToken(token),
         )
         return decode { ForumIndexJson.installationEnvelope(body) }
     }
