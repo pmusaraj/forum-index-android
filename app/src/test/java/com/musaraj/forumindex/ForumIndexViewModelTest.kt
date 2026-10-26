@@ -576,7 +576,7 @@ class ForumIndexViewModelTest {
         assertEquals(18, requests.size)
     }
 
-    @Test fun bookmarksOpenInternalReaderAndClearUnreadWithoutInventingTopicIds() = runTest(dispatcher.scheduler) {
+    @Test fun bookmarksRemainUnreadUntilReadAndNeverInventTopicIds() = runTest(dispatcher.scheduler) {
         val saved = topic(4).copy(forum = topic(4).forum.copy(supportsMarkdown = true)).bookmark()
             .copy(lastReadAt = 1, latestReplyAt = 2)
         val api = FakeApi()
@@ -585,7 +585,10 @@ class ForumIndexViewModelTest {
         vm.openBookmark(saved); advanceUntilIdle()
         assertEquals(4, vm.detailSession.value?.currentTopic?.id)
         assertTrue(vm.detailSession.value!!.currentTopic.forum.supportsMarkdown)
+        assertTrue(vm.stars.value.single().hasUnreadReplies)
+        vm.recordBookmarkProgress(saved.url, MarkdownPost(0, "alice", null, java.time.Instant.ofEpochMilli(2), "reply", 7), null)
         assertFalse(vm.stars.value.single().hasUnreadReplies)
+        assertEquals(7, vm.stars.value.single().lastReadPostNumber)
         assertTrue("action:4:read:true" in api.calls)
         vm.closeTopic()
         val linked = saved.copy(topicId = null, forumId = null, url = "https://example.com/t/other/9")

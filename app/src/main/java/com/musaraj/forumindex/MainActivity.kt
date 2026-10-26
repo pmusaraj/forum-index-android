@@ -113,6 +113,9 @@ class MainActivity : ComponentActivity() {
                             onSelect = model::selectDetailTopic,
                             onToggleStar = model::toggleStar,
                             onDismiss = model::closeTopic,
+                            savedBookmark = { url -> stars.firstOrNull { it.url == url } },
+                            onReadPost = model::recordBookmarkProgress,
+                            onResume = model::recordBookmarkActivity,
                         )
                     }
                 }

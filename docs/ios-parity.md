@@ -121,3 +121,40 @@ Reviewed the adjacent Apple repository through `e9f8254` (build 33), including `
 - Empty linked-preview metadata rows are omitted, retaining the existing isolation of source-topic metadata.
 
 Following screenshot review and user approval, version 1.0.4 (10004) was published to GitHub, internal testing, and open testing (`beta`) on October 20.
+
+## October 26 comparison (Apple 2eb83af)
+
+Reviewed committed Apple changes since `e9f8254`, especially `94a402e` (October 21,
+image zoom and unread-reply resume), `720d71a` (reader footer), and `1e24359`
+(support email).
+
+- Markdown images open an accessible dark viewer with pinch zoom, pan, zoom buttons,
+  Fit, Close, and loading/error/retry states. Image links open the viewer as well.
+  Android retains its bounded, HTTPS-only bitmap loader and supported-format limits.
+- Unread Markdown bookmarks resume at the first unread post. Public Discourse JSON
+  locates the page using the post-ID stream, actual post numbers (including gaps),
+  and the forum's chunk size. Legacy saves use their existing read timestamp until
+  a new post establishes a cursor. No contributor credentials go to the forum.
+- Opening a Markdown bookmark no longer clears unread status. Visible post bottoms
+  advance persisted progress; hidden pages and the full webpage do not. Legacy
+  bookmarks without Markdown capability retain their existing clear-on-open behavior.
+  This supersedes the October 15 clear-on-open behavior for Markdown bookmarks.
+- Resumed previews mark “New replies since last read,” offer earlier-page loading
+  with retry, and provide Back to top. Earlier pages preserve existing post IDs and
+  deduplicate numbered posts. Resume failures retain explicit Retry, Back to top,
+  and View full page choices. Sharing and browser actions keep the original topic URL.
+- The end-of-topic footer now centers the checkmark, heading, topic title, domain,
+  totals, and browser action. README includes `hey@theforumindex.com` for support.
+
+Apple keyboard shortcuts, the macOS subject picker, and signing/build metadata
+remain platform-specific. Debug installation prefixes and bookmark terminology
+were already present in Android.
+
+Validation: 106 JVM tests and all 26 affected Pixel 6 / Android 13 emulator tests
+passed on the final run. Release APK assembly and release lint passed. The initial
+full emulator run exposed the Back to top state-reset issue and two obsolete
+text selectors; these were fixed and covered by the final affected-suite run.
+An existing WebView swipe check failed intermittently during an intermediate
+rerun and passed in the final run. Store screenshot capture was skipped in the
+initial full run because it requires its explicit capture flag. Live-forum and
+physical-device/TalkBack checks remain manual follow-up.

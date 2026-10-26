@@ -34,6 +34,14 @@ internal class MarkdownPreviewHistory(url: URL, private val source: TopicMarkdow
         return true
     }
 
+    /** Replace a linked reader without losing its parent preview. */
+    fun restartCurrentAtBeginning() {
+        val page = current
+        val endpoint = BookmarkActivity.endpoint(page.url.toString()) ?: return
+        val beginning = URL(endpoint.toString().removeSuffix(".json"))
+        mutablePages.value = pages.value.dropLast(1) + MarkdownPreviewPage(page.id, beginning, MarkdownTopicReader(beginning, source))
+    }
+
     fun back(): Boolean {
         if (!canGoBack) return false
         mutablePages.value = pages.value.dropLast(1)

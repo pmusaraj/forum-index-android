@@ -616,8 +616,19 @@ class ForumIndexViewModel(
         return true
     }
 
+    internal fun recordBookmarkProgress(url: String, post: MarkdownPost, latestReplyAt: Long?) {
+        val updated = mutableStars.value.map { if (it.url == url) it.recordProgress(post.postNumber, post.publishedAt?.toEpochMilli(), latestReplyAt) else it }
+        if (updated != mutableStars.value) saveStars(updated)
+    }
+
+    internal fun recordBookmarkActivity(url: String, latestReplyAt: Long?) {
+        if (latestReplyAt == null) return
+        val updated = mutableStars.value.map { if (it.url == url) it.copy(latestReplyAt = maxOf(it.latestReplyAt ?: 0, latestReplyAt)) else it }
+        if (updated != mutableStars.value) saveStars(updated)
+    }
+
     fun markOpened(topic: Topic) {
-        saveStars(mutableStars.value.map { if (it.url == topic.url?.toString()) it.copy(lastReadAt = System.currentTimeMillis()) else it })
+        saveStars(mutableStars.value.map { if (it.url == topic.url?.toString() && !topic.forum.supportsMarkdown) it.copy(lastReadAt = System.currentTimeMillis()) else it })
         markOpened(topic.forum.id, topic.id)
     }
 
@@ -662,7 +673,7 @@ class ForumIndexViewModel(
     }
 
     fun markOpened(star: StarredTopic) {
-        saveStars(mutableStars.value.map { if (it.sameIdentity(star)) it.copy(lastReadAt = System.currentTimeMillis()) else it })
+        saveStars(mutableStars.value.map { if (it.sameIdentity(star) && star.forum?.supportsMarkdown != true) it.copy(lastReadAt = System.currentTimeMillis()) else it })
         if (star.forumId != null && star.topicId != null) preferences.markOpened(star.forumId, star.topicId)
         mutableUiState.value = mutableUiState.value.copy(openedTopicIds = preferences.openedTopicIds)
         if (mutableUiState.value.contribution.enrollment != null) star.topicId?.let { report(it, "read", true) }

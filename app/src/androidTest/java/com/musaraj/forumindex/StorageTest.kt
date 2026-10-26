@@ -27,6 +27,17 @@ class StorageTest {
         tokens.delete()
     }
 
+    @Test fun bookmarkReadCursorSurvivesRestartAndLegacySavesRemainReadable() {
+        val saved = StarredTopic("Topic", "https://forum.test/t/42", "Forum", lastReadPostNumber = 27)
+        preferences.stars = listOf(saved)
+        assertEquals(saved, ForumIndexPreferences(context).stars.single())
+        val raw = context.getSharedPreferences("forum_index", Context.MODE_PRIVATE)
+        val entries = org.json.JSONArray(raw.getString("stars", null))
+        entries.getJSONObject(0).remove("last_read_post_number")
+        raw.edit().putString("stars", entries.toString()).commit()
+        assertNull(ForumIndexPreferences(context).stars.single().lastReadPostNumber)
+    }
+
     @Test fun appearanceAndContributionChoicesSurviveNewStore() {
         assertEquals(AppAppearance.AUTO, preferences.appearance)
         preferences.appearance = AppAppearance.DARK

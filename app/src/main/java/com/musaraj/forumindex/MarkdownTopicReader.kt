@@ -16,6 +16,11 @@ internal object TopicPagination {
             it.path.removeSuffix(".md") == topic.path.removeSuffix(".md") && (pageNumber(it) ?: 0) > after
     }
 
+    fun previousUrl(candidate: URL?, topic: URL, before: Int): URL? = validTopicUrl(candidate)?.takeIf {
+        it.host.equals(topic.host, ignoreCase = true) && it.effectivePort() == topic.effectivePort() &&
+            it.path.removeSuffix(".md") == topic.path.removeSuffix(".md") && (pageNumber(it) ?: 0) in 1 until before
+    }
+
     private fun URL.effectivePort() = if (port == -1) 443 else port
 }
 
@@ -30,6 +35,11 @@ internal data class MarkdownReaderState(
     val loading: Boolean = false,
     val error: String? = null,
     val nextPageUrl: URL? = null,
+    val previousPageUrl: URL? = null,
+    val loadingPrevious: Boolean = false,
+    val loadPreviousError: String? = null,
+    val firstUnreadPostNumber: Int? = null,
+    val latestReplyAt: Long? = null,
     val loadingMore: Boolean = false,
     val loadMoreError: String? = null,
 ) {
@@ -44,17 +54,30 @@ internal class MarkdownTopicReader(private val url: URL, private val source: Top
     private val mutableState = MutableStateFlow(MarkdownReaderState(baseUrl = url))
     val state = mutableState.asStateFlow()
 
-    suspend fun load() {
+    private val loadedPages = mutableSetOf<Int>()
+    private var nextPostId = 0
+    private fun uniquePosts(posts: List<MarkdownPost>, existing: List<MarkdownPost> = emptyList()): List<MarkdownPost> {
+        val numbers = existing.mapNotNull { it.postNumber }.toMutableSet()
+        return posts.filter { it.postNumber == null || numbers.add(it.postNumber) }.map { it.copy(id = nextPostId++) }
+    }
+
+    suspend fun load(bookmark: StarredTopic? = null, resumeClient: TopicResumeClient = TopicResumeClient()) {
         if (state.value.loading || state.value.loaded) return
         mutableState.value = state.value.copy(loading = true, error = null)
         try {
-            val page = source.fetch(url)
+            val target = bookmark?.takeIf { it.hasUnreadReplies }?.let { resumeClient.target(it) }
+            val page = source.fetch(target?.pageUrl ?: url)
             currentCoroutineContext().ensureActive()
             val document = MarkdownTopicDocument.parse(page.markdown, page.url)
+            if (target?.postNumber != null && document.posts.none { it.postNumber == target.postNumber })
+                throw java.io.IOException("Unread reply no longer available")
+            loadedPages.add(document.pageNumber)
             mutableState.value = state.value.copy(
+                firstUnreadPostNumber = target?.postNumber, latestReplyAt = target?.latestReplyAt,
+                previousPageUrl = TopicPagination.previousUrl(document.previousPageUrl, page.url, document.pageNumber),
                 summary = document.summary, startsTopic = document.startsTopic, reachedLastPage = !document.hasNextPage,
-                posts = document.posts, baseUrl = page.url, title = document.title, loaded = true,
-                nextPageUrl = TopicPagination.nextUrl(document.nextPageUrl, page.url, TopicPagination.pageNumber(page.url) ?: 1),
+                posts = uniquePosts(document.posts), baseUrl = page.url, title = document.title, loaded = true,
+                nextPageUrl = TopicPagination.nextUrl(document.nextPageUrl, page.url, document.pageNumber),
             )
         } catch (error: CancellationException) {
             throw error
@@ -68,14 +91,16 @@ internal class MarkdownTopicReader(private val url: URL, private val source: Top
     suspend fun loadNextPage(retrying: Boolean = false) {
         val current = state.value
         val next = current.nextPageUrl ?: return
-        if (current.loadingMore || (current.loadMoreError != null && !retrying)) return
+        if (TopicPagination.pageNumber(next) in loadedPages) return
+        if (current.loadingMore || current.loadingPrevious || (current.loadMoreError != null && !retrying)) return
         mutableState.value = current.copy(loadingMore = true, loadMoreError = null)
         try {
             val page = source.fetch(next)
             currentCoroutineContext().ensureActive()
             val document = MarkdownTopicDocument.parse(page.markdown, page.url, current.posts.size)
+            loadedPages.add(document.pageNumber)
             mutableState.value = state.value.copy(
-                posts = current.posts + document.posts,
+                posts = current.posts + uniquePosts(document.posts, current.posts),
                 reachedLastPage = !document.hasNextPage && document.posts.isNotEmpty(),
                 nextPageUrl = if (document.posts.isEmpty()) null else
                     TopicPagination.nextUrl(document.nextPageUrl, current.baseUrl, TopicPagination.pageNumber(next)!!),
@@ -88,4 +113,26 @@ internal class MarkdownTopicReader(private val url: URL, private val source: Top
             mutableState.value = state.value.copy(loadingMore = false)
         }
     }
+    suspend fun loadPreviousPage() {
+        val current = state.value
+        val previous = current.previousPageUrl ?: return
+        if (current.loadingPrevious || current.loadingMore || TopicPagination.pageNumber(previous) in loadedPages) return
+        mutableState.value = current.copy(loadingPrevious = true, loadPreviousError = null)
+        try {
+            val page = source.fetch(previous)
+            currentCoroutineContext().ensureActive()
+            val document = MarkdownTopicDocument.parse(page.markdown, page.url)
+            loadedPages.add(document.pageNumber)
+            mutableState.value = state.value.copy(
+                posts = uniquePosts(document.posts, current.posts) + current.posts,
+                startsTopic = current.startsTopic || document.startsTopic,
+                summary = if (document.startsTopic) document.summary else current.summary,
+                previousPageUrl = if (document.posts.isEmpty()) null else TopicPagination.previousUrl(document.previousPageUrl, current.baseUrl, document.pageNumber),
+            )
+        } catch (error: CancellationException) { throw error
+        } catch (_: Exception) {
+            mutableState.value = state.value.copy(loadPreviousError = "Couldn’t load earlier replies.")
+        } finally { mutableState.value = state.value.copy(loadingPrevious = false) }
+    }
+
 }

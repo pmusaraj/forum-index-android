@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -62,7 +63,7 @@ class TopicDetailUiTest {
         compose.onNodeWithTag("topic-markdown-preview").performScrollToIndex(11)
         val before = compose.onNodeWithTag("post-author-10").fetchSemanticsNode().boundsInRoot.top
         clickMarkdownLink("Open linked reply")
-        compose.onNodeWithText("Linked title").assertIsDisplayed()
+        compose.onNodeWithTag("topic-preview-title").assertTextEquals("Linked title").assertIsDisplayed()
         compose.onNodeWithText("@bob").assertIsDisplayed()
         compose.onNodeWithTag("topic-preview-details").assertDoesNotExist()
         compose.onNodeWithTag("external-signal-lobsters").assertDoesNotExist()
@@ -103,7 +104,7 @@ class TopicDetailUiTest {
         compose.onNodeWithText("View full page").performClick()
         compose.onNodeWithText("Full webpage https://forum.example/t/other/2").assertIsDisplayed()
         compose.runOnIdle { backDispatcher!!.onBackPressed() }
-        compose.onNodeWithText("Topic 1").assertIsDisplayed()
+        compose.onNodeWithTag("topic-preview-title").assertTextEquals("Topic 1").assertIsDisplayed()
         compose.onNodeWithTag("topic-header-back").assertDoesNotExist()
         compose.runOnIdle { assertFalse(closed) }
     }
@@ -180,11 +181,11 @@ class TopicDetailUiTest {
         show(topics = listOf(topic(1), topic(2), topic(3)), source = { MarkdownPage(document("Body"), it) }, select = { current = it })
         compose.onNodeWithTag("topic-detail-pager").performTouchInput { swipeLeft() }
         compose.waitForIdle()
-        compose.onNodeWithText("Topic 2").assertIsDisplayed()
+        compose.onNodeWithTag("topic-preview-title").assertTextEquals("Topic 2").assertIsDisplayed()
         compose.runOnIdle { assertEquals(1, current) }
         compose.onNodeWithTag("topic-detail-pager").performTouchInput { swipeRight() }
         compose.waitForIdle()
-        compose.onNodeWithText("Topic 1").assertIsDisplayed()
+        compose.onNodeWithTag("topic-preview-title").assertTextEquals("Topic 1").assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, current) }
     }
 

@@ -9,11 +9,13 @@ internal data class MarkdownPost(
     val avatarUrl: URL?,
     val publishedAt: Instant?,
     val markdown: String,
+    val postNumber: Int? = null,
 )
 
 /** Parses only Discourse's generated envelope; post Markdown remains intact. */
 internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nextPageUrl: URL?, val title: String? = null, val summary: String? = null,
-    val startsTopic: Boolean = false, val hasNextPage: Boolean = false) {
+    val startsTopic: Boolean = false, val hasNextPage: Boolean = false,
+    val previousPageUrl: URL? = null, val pageNumber: Int = 1) {
     companion object {
         fun parse(markdown: String, baseUrl: URL, postIdOffset: Int = 0): MarkdownTopicDocument {
             val lines = markdown.replace("\r\n", "\n").split('\n')
@@ -37,6 +39,8 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
             var date: Instant? = null
             var hasMetadata = false
             var next: URL? = null
+            var previous: URL? = null
+            var postNumber: Int? = null
             var fence: Char? = null
             var fenceLength = 0
 
@@ -52,7 +56,7 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
                     }
                 }
                 if (hasMetadata || content.isNotBlank()) {
-                    posts += MarkdownPost(postIdOffset + posts.size, author, avatar, date, content)
+                    posts += MarkdownPost(postIdOffset + posts.size, author, avatar, date, content, postNumber)
                 }
                 body.clear()
             }
@@ -77,6 +81,7 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
                 if (fence == null && index in footer) {
                     val match = navigation.matchEntire(line)!!
                     if (match.groupValues[1] == "Next") next = resolveTopicUrl(baseUrl, match.groupValues[2])
+                    else previous = resolveTopicUrl(baseUrl, match.groupValues[2])
                     index++
                     continue
                 }
@@ -84,6 +89,7 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
                 val legacyDate = legacy?.groupValues?.get(2)?.let { try { Instant.parse(it) } catch (_: Exception) { null } }
                 if (legacy != null && legacyDate != null) {
                     appendPost(beforeMetadata = true)
+                    postNumber = Regex("## Post ([0-9]+)").find(line)?.groupValues?.get(1)?.toIntOrNull()
                     author = legacy.groupValues[1].replace("\\_", "_")
                     avatar = null
                     date = legacyDate
@@ -99,6 +105,9 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
                         appendPost(beforeMetadata = true)
                         author = username.find(authorLine)?.groupValues?.get(1)?.replace("\\_", "_")
                         avatar = avatarPattern.find(authorLine)?.groupValues?.get(1)?.let { resolveTopicUrl(baseUrl, it) }
+                        val dateLine = metadata.firstOrNull { it.startsWith("#### Post date:") || it.startsWith("**Post date:**") }.orEmpty()
+                        val permalink = Regex("""\]\(([^\s)]+)""").find(dateLine)?.groupValues?.get(1)?.let { resolveTopicUrl(baseUrl, it) }
+                        postNumber = permalink?.path?.let { Regex("""/t/(?:[^/]+/)?[0-9]+/([0-9]+)/?$""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
                         val timestamp = datePattern.find(metadata.firstOrNull { it.startsWith("#### Post date:") || it.startsWith("**Post date:**") }.orEmpty())
                             ?.groupValues?.get(1)
                         date = try { timestamp?.let(Instant::parse) } catch (_: Exception) { null }
@@ -114,7 +123,8 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
             val title = if (hasEnvelope) lines.first().removePrefix("# ").trim().takeIf { it.isNotEmpty() } else null
             return MarkdownTopicDocument(posts, next, title, summary,
                 startsTopic && footer.none { lines[it].startsWith("[Previous page]") },
-                footer.any { lines[it].startsWith("[Next page]") })
+                footer.any { lines[it].startsWith("[Next page]") }, previous,
+                envelope.firstNotNullOfOrNull { Regex("""^\*\*Page:\*\* ([0-9]+)""").find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: (TopicPagination.pageNumber(baseUrl) ?: 1))
         }
 
         private val legacyMetadata = Regex("""^## Post [0-9]+ by @([^\s]+) — ([0-9]{4}-[^\s]+)$""")

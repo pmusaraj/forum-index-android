@@ -27,6 +27,7 @@ data class StarredTopic(
     val publishedAt: java.time.Instant? = null,
     val replyCount: Int = 0,
     val externalSignals: List<ExternalSignal> = emptyList(),
+    val lastReadPostNumber: Int? = null,
 ) {
     val hasUnreadReplies get() = latestReplyAt?.let { it > lastReadAt } == true
 }
@@ -90,6 +91,7 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
                         val url = javaUrl(entry.optString("url"))
                         if (source != null && url != null) ExternalSignal(source, url) else null
                     } }.orEmpty(),
+                    if (it.isNull("last_read_post_number")) null else it.getInt("last_read_post_number"),
                 )
             }
         }
@@ -103,6 +105,7 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
                 .put("external_signals", JSONArray().also { signals -> star.externalSignals.forEach {
                     signals.put(JSONObject().put("source", it.source.apiValue).put("url", it.url.toString()))
                 } })
+                .put("last_read_post_number", star.lastReadPostNumber)
                 .put("added_at", star.addedAt).put("last_read_at", star.lastReadAt).put("latest_reply_at", star.latestReplyAt)
                 .put("forum", star.forum?.let { f -> JSONObject().put("id", f.id).put("name", f.name).put("slug", f.slug)
                     .put("base_url", f.baseUrl?.toString()).put("icon_url", f.iconUrl?.toString()).put("supports_markdown", f.supportsMarkdown) })

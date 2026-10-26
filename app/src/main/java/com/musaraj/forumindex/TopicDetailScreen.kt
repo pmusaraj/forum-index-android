@@ -1,6 +1,7 @@
 package com.musaraj.forumindex
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -84,6 +85,10 @@ internal fun TopicDetailScreen(
     onToggleStar: (StarredTopic) -> Unit,
     onDismiss: () -> Unit,
     source: TopicMarkdownSource = remember { TopicMarkdownClient() },
+    savedBookmark: (String) -> StarredTopic? = { null },
+    onReadPost: (String, MarkdownPost, Long?) -> Unit = { _, _, _ -> },
+    onResume: (String, Long?) -> Unit = { _, _ -> },
+    resumeClient: TopicResumeClient = remember { TopicResumeClient() },
     webContent: @Composable (URL, Boolean, (Boolean) -> Unit) -> Unit = { url, visible, ready ->
         TopicWebPage(url, visible = visible, onReady = ready)
     },
@@ -102,7 +107,7 @@ internal fun TopicDetailScreen(
         val topic = session.topics[index]
         val active = pager.settledPage == index
         Box(Modifier.fillMaxSize().then(if (active) Modifier else Modifier.clearAndSetSemantics { })) {
-            TopicDetailPage(topic, active, source, webContent, isStarred, onToggleStar, onDismiss)
+            TopicDetailPage(topic, active, source, webContent, isStarred, onToggleStar, onDismiss, savedBookmark, onReadPost, onResume, resumeClient)
         }
     }
 }
@@ -116,31 +121,44 @@ private fun TopicDetailPage(
     isStarred: (StarredTopic) -> Boolean,
     onToggleStar: (StarredTopic) -> Unit,
     onDismiss: () -> Unit,
+    savedBookmark: (String) -> StarredTopic?,
+    onReadPost: (String, MarkdownPost, Long?) -> Unit,
+    onResume: (String, Long?) -> Unit,
+    resumeClient: TopicResumeClient,
 ) {
     val url = validTopicUrl(topic.url) ?: return
-    val history = remember(url, source) { MarkdownPreviewHistory(url, source) }
-    val pages by history.pages.collectAsState()
+    val initialBookmark = remember(url) { savedBookmark(url.toString()) }
+    var restart by remember(url) { mutableStateOf(0) }
+    val history = remember(url, source, restart) { MarkdownPreviewHistory(url, source) }
+    val pages by key(history) { history.pages.collectAsState() }
     val page = pages.last()
     val reader = page.reader
-    val state by key(page.id) { reader.state.collectAsState() }
+    val state by key(reader) { reader.state.collectAsState() }
     var showsOverview by rememberSaveable { mutableStateOf(false) }
     var usesWeb by rememberSaveable(url.toString()) { mutableStateOf(!topic.forum.supportsMarkdown) }
     var fullPageReady by remember(page.id) { mutableStateOf(false) }
-    val scope = key(page.id) { rememberCoroutineScope() }
+    val scope = key(reader) { rememberCoroutineScope() }
     val articleState = rememberSaveableStateHolder()
+    val lifecycleState by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    val foreground = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
     val bookmark = page.bookmark(topic)
     val goBack = {
         if (history.back()) {
-            articleState.removeState(page.id)
+            articleState.removeState("$restart:${page.id}")
             usesWeb = false
         }
     }
     BackHandler(enabled = active && history.canGoBack, onBack = goBack)
 
-    LaunchedEffect(page.id) {
+    val resumeBookmark = initialBookmark.takeIf { page.id == 0 && restart == 0 }
+    suspend fun loadReader() {
+        reader.load(resumeBookmark, resumeClient)
+        if (page.id == 0) onResume(url.toString(), reader.state.value.latestReplyAt)
+    }
+    LaunchedEffect(reader) {
         if (topic.forum.supportsMarkdown) {
-            reader.load()
-            if (history.current === page && page.id == 0 && reader.state.value.error != null) usesWeb = true
+            loadReader()
+            if (history.current === page && page.id == 0 && reader.state.value.error != null && resumeBookmark?.hasUnreadReplies != true) usesWeb = true
         }
     }
     Box(Modifier.fillMaxSize().background(TopicBackground)) {
@@ -172,17 +190,25 @@ private fun TopicDetailPage(
                 // Preserve each reader and its saved list position without retaining hidden native text views.
                 if (state.loaded) {
                     Box(Modifier.fillMaxSize().then(if (usesWeb) Modifier.alpha(0f).clearAndSetSemantics { } else Modifier)) {
-                        articleState.SaveableStateProvider(page.id) {
-                            TopicArticle(
-                                title = bookmark.title,
-                                publishedAt = if (page.id == 0) topic.publishedAt else null,
-                                replyCount = if (page.id == 0) topic.replyCount else null,
-                                externalSignals = if (page.id == 0) topic.externalSignals else emptyList(),
-                                state = state, active = active && !usesWeb, reader = reader,
-                                onInternalLink = { destination ->
-                                    history.open(destination).also { handled -> if (handled) usesWeb = false }
-                                },
-                            )
+                        key(reader) {
+                            articleState.SaveableStateProvider("$restart:${page.id}") {
+                                TopicArticle(
+                                    title = bookmark.title, browserUrl = page.url,
+                                    publishedAt = if (page.id == 0) topic.publishedAt else null,
+                                    replyCount = if (page.id == 0) topic.replyCount else null,
+                                    externalSignals = if (page.id == 0) topic.externalSignals else emptyList(),
+                                    state = state, active = active && !usesWeb && foreground, reader = reader,
+                                    onBeginning = {
+                                        articleState.removeState("$restart:${page.id}")
+                                        if (page.id == 0) restart++ else history.restartCurrentAtBeginning()
+                                        usesWeb = false
+                                    },
+                                    onReadPost = { post, latest -> if (page.id == 0) onReadPost(url.toString(), post, latest) },
+                                    onInternalLink = { destination ->
+                                        history.open(destination).also { handled -> if (handled) usesWeb = false }
+                                    },
+                                )
+                            }
                         }
                     }
                 } else if (!usesWeb) {
@@ -191,7 +217,8 @@ private fun TopicDetailPage(
                             Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(state.error!!)
-                            Button(onClick = { scope.launch { reader.load() } }) { Text("Retry") }
+                            Button(onClick = { scope.launch { loadReader() } }) { Text("Retry") }
+                            if (resumeBookmark?.hasUnreadReplies == true) Button(onClick = { restart++ }) { Text("Back to top") }
                             Button(onClick = { usesWeb = true }) { Text("View full page") }
                         }
                         else -> CircularProgressIndicator(Modifier.align(Alignment.Center).testTag("topic-loading"))
@@ -217,6 +244,7 @@ private fun TopicDetailPage(
 @Composable
 private fun TopicArticle(
     title: String,
+    browserUrl: URL,
     publishedAt: Instant?,
     replyCount: Int?,
     externalSignals: List<ExternalSignal>,
@@ -224,10 +252,14 @@ private fun TopicArticle(
     active: Boolean,
     reader: MarkdownTopicReader,
     onInternalLink: (URL) -> Boolean,
+    onBeginning: () -> Unit,
+    onReadPost: (MarkdownPost, Long?) -> Unit,
 ) {
     var showsSummary by remember(reader) { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val listState = rememberLazyListState()
+    val hasEarlierNavigation = state.firstUnreadPostNumber != null || state.previousPageUrl != null
+    val firstUnreadIndex = state.posts.indexOfFirst { it.postNumber == state.firstUnreadPostNumber && it.postNumber != null }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (firstUnreadIndex >= 0) firstUnreadIndex + 1 + (if (state.previousPageUrl != null) 1 else 0) else 0)
     val density = LocalDensity.current.density
     var titleHeight by remember { mutableStateOf(0) }
     val visibility = remember(active, reader) { TopicTitleVisibility() }
@@ -248,11 +280,28 @@ private fun TopicArticle(
             if (!offscreen) { visibility.reset(); compactTitle = false }
         }
     }
-    val renderer = rememberMarkdownRenderer(state.baseUrl, onInternalLink)
+    var selectedImage by remember(reader) { mutableStateOf<TopicImage?>(null) }
+    val renderer = rememberMarkdownRenderer(state.baseUrl, onInternalLink) { selectedImage = it }
+    if (selectedImage != null) TopicImageLightbox(selectedImage!!) { selectedImage = null }
     val renderedPosts = remember(reader) { mutableStateMapOf<Int, Boolean>() }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(active, state.nextPageUrl, state.loadMoreError) {
-        if (!active || state.nextPageUrl == null || state.loadMoreError != null) return@LaunchedEffect
+    val readCallback by androidx.compose.runtime.rememberUpdatedState(onReadPost)
+    LaunchedEffect(active, reader, state.posts, state.loadingPrevious, selectedImage) {
+        if (!active || state.loadingPrevious || selectedImage != null) return@LaunchedEffect
+        snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo.filter {
+                it.key is Int && renderedPosts[it.key] == true &&
+                    it.offset + it.size <= listState.layoutInfo.viewportEndOffset &&
+                    it.offset + it.size > listState.layoutInfo.viewportStartOffset
+            }.mapNotNull { item -> state.posts.firstOrNull { it.id == item.key } }
+        }.distinctUntilChanged().collect { posts ->
+            posts.forEach { post -> readCallback(post, state.latestReplyAt.takeIf {
+                state.reachedLastPage && post.id == state.posts.lastOrNull()?.id
+            }) }
+        }
+    }
+    LaunchedEffect(active, state.nextPageUrl, state.loadMoreError, state.loadingPrevious) {
+        if (!active || state.loadingPrevious || state.nextPageUrl == null || state.loadMoreError != null) return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
             val last = layout.visibleItemsInfo.lastOrNull()
@@ -264,7 +313,7 @@ private fun TopicArticle(
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().background(TopicBackground).nestedScroll(scrollConnection).testTag("topic-markdown-preview"),
+            modifier = Modifier.fillMaxSize().padding(top = if (hasEarlierNavigation) 48.dp else 0.dp).background(TopicBackground).nestedScroll(scrollConnection).testTag("topic-markdown-preview"),
             contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 190.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
@@ -285,8 +334,22 @@ private fun TopicArticle(
                     MarkdownPostBody(state.summary, renderer)
                 }
             }
+            if (state.previousPageUrl != null) item(key = "earlier") {
+                Column {
+                    if (state.loadingPrevious) CircularProgressIndicator()
+                    state.loadPreviousError?.let { Text(it) }
+                    Button(onClick = { scope.launch { reader.loadPreviousPage() } }, enabled = !state.loadingPrevious,
+                        modifier = Modifier.testTag("topic-earlier-replies")) {
+                        Text(if (state.loadPreviousError == null) "Load earlier replies" else "Retry earlier replies")
+                    }
+                }
+            }
             items(state.posts, key = { it.id }) { post ->
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (post.postNumber != null && post.postNumber == state.firstUnreadPostNumber) {
+                        Text("New replies since last read", color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.semantics { heading() }.testTag("topic-first-unread"))
+                    }
                     if (!state.startsTopic || post.id != state.posts.firstOrNull()?.id) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
                         if (post.username != null) PostAuthor(post)
@@ -295,13 +358,21 @@ private fun TopicArticle(
                 }
             }
             if (state.hasCompleteTopic) item(key = "footer") {
-                Column(verticalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.testTag("topic-reader-footer")) {
-                    HorizontalDivider()
-                    Text("You reached the end of topic: $title in ${state.baseUrl.host}")
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 12.dp).testTag("topic-reader-footer")) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        HorizontalDivider(Modifier.weight(1f))
+                        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
+                        HorizontalDivider(Modifier.weight(1f))
+                    }
+                    Text("END OF TOPIC", letterSpacing = 2.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.semantics { heading() }.testTag("topic-end-heading"))
+                    Text(title, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text(state.baseUrl.host, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val totals = listOfNotNull((state.replyCount ?: replyCount)?.let { "$it ${if (it == 1) "reply" else "replies"}" },
                         state.participantCount?.let { "$it ${if (it == 1) "participant" else "participants"}" })
                     if (totals.isNotEmpty()) Text(totals.joinToString(" · "))
-                    Button(onClick = { openExternalTopic(state.baseUrl, context::startActivity) }) { Text("Open in browser") }
+                    Button(onClick = { openExternalTopic(browserUrl, context::startActivity) }) { Text("Open in browser") }
                 }
             }
             item(key = "pagination") {
@@ -318,10 +389,13 @@ private fun TopicArticle(
             Column(Modifier.fillMaxWidth().background(TopicBackground).align(Alignment.TopCenter)) {
                 Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                    modifier = Modifier.padding(start = 20.dp, end = if (hasEarlierNavigation) 120.dp else 20.dp, top = 12.dp, bottom = 12.dp)
                         .semantics { heading() }.testTag("topic-compact-title"))
                 HorizontalDivider()
             }
+        }
+        if (hasEarlierNavigation) {
+            TextButton(onClick = onBeginning, modifier = Modifier.align(Alignment.TopEnd).background(TopicBackground).testTag("topic-back-to-top")) { Text("Back to top") }
         }
     }
 }

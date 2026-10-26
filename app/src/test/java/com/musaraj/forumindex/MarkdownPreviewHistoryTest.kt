@@ -9,6 +9,16 @@ class MarkdownPreviewHistoryTest {
     private val root = URL("https://forum.example/t/root/123")
     private val source = TopicMarkdownSource { url -> MarkdownPage("# Linked topic\n\n**URL:** $url\n**Showing post:** 7\n\nBody", url) }
 
+    @Test fun restartingLinkedTopicKeepsParentHistory() {
+        val root = URL("https://forum.test/t/root/1")
+        val history = MarkdownPreviewHistory(root) { MarkdownPage("Text", it) }
+        history.open(URL("https://forum.test/t/linked/42/7?page=2#reply"))
+        history.restartCurrentAtBeginning()
+        assertEquals("https://forum.test/t/42", history.current.url.toString())
+        assertTrue(history.back())
+        assertEquals(root, history.current.url)
+    }
+
     @Test fun internalPostLinksKeepExactUrlAndBackRetainsReader() = runTest {
         val history = MarkdownPreviewHistory(root, source)
         val initial = history.current

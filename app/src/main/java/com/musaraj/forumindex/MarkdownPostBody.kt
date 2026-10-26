@@ -38,11 +38,12 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 @Composable
-internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boolean = { false }): Markwon {
+internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boolean = { false }, onImage: (TopicImage) -> Unit = {}): Markwon {
     val context = LocalContext.current
     val resources = LocalResources.current
     val colors = MaterialTheme.colorScheme
     val handleInternalLink by rememberUpdatedState(onInternalLink)
+    val handleImage by rememberUpdatedState(onImage)
     return remember(context, resources, baseUrl, colors) {
         Markwon.builder(context)
             .usePlugin(TablePlugin.create(context))
@@ -50,6 +51,19 @@ internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boo
             .usePlugin(TaskListPlugin.create(context))
             .usePlugin(ImagesPlugin.create { it.addSchemeHandler(TopicImageHandler(resources)) })
             .usePlugin(object : AbstractMarkwonPlugin() {
+                override fun beforeSetText(textView: TextView, markdown: Spanned) {
+                    val text = markdown as? android.text.Spannable ?: return
+                    text.getSpans(0, text.length, io.noties.markwon.image.AsyncDrawableSpan::class.java).forEach { span ->
+                        val start = text.getSpanStart(span)
+                        val end = text.getSpanEnd(span)
+                        val url = resolveTopicUrl(baseUrl, span.drawable.destination) ?: return@forEach
+                        text.getSpans(start, end, android.text.style.ClickableSpan::class.java).forEach { text.removeSpan(it) }
+                        val label = text.subSequence(start, end).toString().takeIf { it.isNotBlank() } ?: "Image"
+                        text.setSpan(object : android.text.style.ClickableSpan() {
+                            override fun onClick(widget: android.view.View) { handleImage(TopicImage(url, label)) }
+                        }, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
                 override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
                     builder.linkResolver { view, link ->
                         resolveTopicUrl(baseUrl, link)?.let {
@@ -113,44 +127,49 @@ private class TopicImageHandler(private val resources: android.content.res.Resou
     override fun supportedSchemes() = listOf("https")
 
     override fun handle(raw: String, uri: Uri): ImageItem {
-        var url = validTopicUrl(URL(raw)) ?: throw IOException("Unsupported image URL")
-        repeat(6) {
-            val connection = url.openConnection() as HttpURLConnection
-            try {
-                connection.instanceFollowRedirects = false
-                connection.connectTimeout = 5_000
-                connection.readTimeout = 10_000
-                val status = connection.responseCode
-                if (status in listOf(301, 302, 303, 307, 308)) {
-                    url = connection.getHeaderField("Location")?.let { resolveTopicUrl(url, it) }
-                        ?: throw IOException("Unsupported image redirect")
-                } else {
-                    if (status !in 200..299) throw IOException("Image unavailable")
-                    val bytes = connection.inputStream.use { input ->
-                        val output = java.io.ByteArrayOutputStream()
-                        val buffer = ByteArray(8192)
-                        while (true) {
-                            val size = input.read(buffer)
-                            if (size < 0) break
-                            if (output.size() + size > 8 * 1024 * 1024) throw IOException("Image is too large")
-                            output.write(buffer, 0, size)
-                        }
-                        output.toByteArray()
-                    }
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                    if (bounds.outWidth !in 1..16384 || bounds.outHeight !in 1..16384) throw IOException("Unsupported image")
-                    val options = BitmapFactory.Options().apply {
-                        inSampleSize = 1
-                        while (bounds.outWidth / inSampleSize > 2048 || bounds.outHeight / inSampleSize > 2048) inSampleSize *= 2
-                    }
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: throw IOException("Unsupported image")
-                    return ImageItem.withResult(bitmap.toDrawable(resources).apply { setBounds(0, 0, bitmap.width, bitmap.height) })
-                }
-            } finally {
-                connection.disconnect()
-            }
-        }
-        throw IOException("Too many image redirects")
+        val bitmap = loadTopicBitmap(raw)
+        return ImageItem.withResult(bitmap.toDrawable(resources).apply { setBounds(0, 0, bitmap.width, bitmap.height) })
     }
+}
+
+internal fun loadTopicBitmap(raw: String): android.graphics.Bitmap {
+    var url = validTopicUrl(URL(raw)) ?: throw IOException("Unsupported image URL")
+    repeat(6) {
+        val connection = url.openConnection() as HttpURLConnection
+        try {
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 10_000
+            val status = connection.responseCode
+            if (status in listOf(301, 302, 303, 307, 308)) {
+                url = connection.getHeaderField("Location")?.let { resolveTopicUrl(url, it) }
+                    ?: throw IOException("Unsupported image redirect")
+            } else {
+                if (status !in 200..299) throw IOException("Image unavailable")
+                val bytes = connection.inputStream.use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val size = input.read(buffer)
+                        if (size < 0) break
+                        if (output.size() + size > 8 * 1024 * 1024) throw IOException("Image is too large")
+                        output.write(buffer, 0, size)
+                    }
+                    output.toByteArray()
+                }
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                if (bounds.outWidth !in 1..16384 || bounds.outHeight !in 1..16384) throw IOException("Unsupported image")
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = 1
+                    while (bounds.outWidth / inSampleSize > 2048 || bounds.outHeight / inSampleSize > 2048) inSampleSize *= 2
+                }
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: throw IOException("Unsupported image")
+                return bitmap
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+    throw IOException("Too many image redirects")
 }

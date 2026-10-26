@@ -155,3 +155,31 @@ Validation:
 - [x] Omit empty linked-preview metadata rows
 
 Validation: 95 JVM tests passed. The full Pixel 9 / Android 15 suite passed 50 tests with one opt-in store exporter skipped. Release lint passed with 0 errors, 33 warnings, and 1 hint. Review screenshots use production composables with deterministic fixture data; live nickname updates were not submitted to the production server. Screenshots cover loading, Settings, and regenerated nicknames in both appearances. Version 1.0.4 (10004) was subsequently published to open testing after user approval on October 20.
+
+## October 26 reader and bookmark follow-up
+
+Apple reference: `2eb83af`, including image zoom/unread resume in `94a402e`.
+
+- [x] Inline and linked Markdown images open a zoomable viewer with pan, Fit,
+  Close, and failure/retry handling.
+- [x] Persist bookmark post cursors alongside existing read/activity timestamps;
+  legacy bookmarks remain compatible.
+- [x] Locate the first unread post using real Discourse post numbers and page
+  sizes; preserve post-number gaps and fall back to timestamps for legacy saves.
+- [x] Resume directly at the unread boundary, show its marker, and track reading
+  only in the visible foreground Markdown preview.
+- [x] Load earlier replies with retry and deduplication; Back to top resets the
+  root reader or restarts a linked topic while retaining its parent history.
+- [x] Keep unread status after merely opening Markdown bookmarks or failing to
+  resume. Preserve explicit retry, beginning, and full-page escape routes.
+- [x] Center the new end-of-topic footer and document the public support email.
+- [ ] Physical-device/TalkBack verification and live-forum resume/image checks.
+
+Validation: 106 JVM tests and all 26 affected Pixel 6 / Android 13 emulator tests
+passed on the final run. Release APK assembly and release lint passed. The initial
+full emulator run exposed the Back to top state-reset issue and two obsolete
+text selectors; these were fixed and covered by the final affected-suite run.
+An existing WebView swipe check failed intermittently during an intermediate
+rerun and passed in the final run. Store screenshot capture was skipped in the
+initial full run because it requires its explicit capture flag. Live-forum and
+physical-device/TalkBack checks remain manual follow-up.
