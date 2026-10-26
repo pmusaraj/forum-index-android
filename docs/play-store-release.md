@@ -56,7 +56,7 @@ See Google's [preview asset specifications](https://support.google.com/googlepla
 - Confirm whether contributor enrollment falls under Google's account-creation rules. The app sends a DELETE request when opting out, but backend deletion semantics have not been verified here. If applicable, provide clear in-app account/data deletion and a functional external deletion-request page. “Opt out” alone must not be assumed to satisfy the policy.
 - Review user-generated-content obligations for indexed forums, moderation/report handling, and any account interaction available through the embedded forum pages.
 - Complete Ads, App access, Target audience, Content rating, Data safety, and other applicable Console declarations. No advertising SDK appears in the direct app dependencies; verify third-party content before answering the Ads declaration.
-- Reviewer instructions: new devices enroll automatically using a generated contributor name and detected device name. Tap Settings to opt out, re-enable contributions, rename the device, or choose Auto/Light/Dark appearance. Basic reading remains available after opting out. Trusted forum-submission tools require backend-granted status; arrange reviewer access/instructions if included in review scope. Android attestation is not implemented, so installs show as device-unverified.
+- Reviewer instructions: new devices enroll automatically using a generated contributor name and detected device name. Tap Settings to opt out, re-enable contributions, generate a new nickname, or choose Auto/Light/Dark appearance. Basic reading remains available after opting out. Trusted forum-submission tools require backend-granted status; arrange reviewer access/instructions if included in review scope. Android attestation is not implemented, so installs show as device-unverified.
 
 References: [User data policy](https://support.google.com/googleplay/android-developer/answer/10144311), [account deletion](https://support.google.com/googleplay/android-developer/answer/13327111).
 
@@ -64,7 +64,7 @@ References: [User data policy](https://support.google.com/googleplay/android-dev
 
 1. Run unit tests, release lint, and the signed bundle build above. Run `./gradlew connectedDebugAndroidTest` on an emulator or device. Inspect `app/build/reports/` for failures.
 2. Upload the signed AAB to internal testing. Install the Play-delivered build to validate signing and bundle delivery; inspect the pre-launch report and resolve crashes/accessibility issues.
-3. Smoke-test Android 9 and a current Android device: loading and offline retry, paging, subject selection, saved stars after restart, WebView navigation, sharing, enrollment, read/star/report submissions, and opt-out. Include a 16 KB page-size device/emulator: Compose brings a native graphics library into the bundle. Confirm opting out stops future submissions and verify server-side deletion/retention behavior.
+3. Smoke-test Android 9 and a current Android device: loading and offline retry, paging, subject selection, saved bookmarks after restart, WebView navigation, sharing, enrollment, read/bookmark/report submissions, and opt-out. Include a 16 KB page-size device/emulator: Compose brings a native graphics library into the bundle. Confirm opting out stops future submissions and verify server-side deletion/retention behavior.
 4. Complete account verification and Play Console setup. For personal accounts created after November 13, 2023, check the [closed-testing requirement](https://support.google.com/googleplay/android-developer/answer/14151465): at least 12 testers continuously opted in for 14 days before applying for production access. Internal testing does not substitute for this.
 5. Finish listing assets and declarations, resolve Console warnings, then submit for review. Recheck current requirements at submission time.
 
@@ -76,3 +76,13 @@ References: [User data policy](https://support.google.com/googleplay/android-dev
 - `bundleRelease` succeeded with a disposable test key and its JAR signature verified. The disposable test bundle is not a production upload artifact. Build again with the real upload key before submission.
 - Store text fits the title, short-description, and full-description character limits.
 - Device/UI tests were not run: no device or emulator was connected. Play-delivered and 16 KB device checks remain pending.
+
+## Published update: 1.0.4 (October 20, 2026)
+
+[Version 1.0.4](https://github.com/pmusaraj/forum-index-android/releases/tag/v1.0.4), code `10004`, is published with signed APK/AAB assets, checksums, and the existing release certificate. Release commit: `3d4141358544b90be12fc7cd14934d766c178c74`. The release workflow successfully uploaded to internal testing, and the [open-testing workflow](https://github.com/pmusaraj/forum-index-android/actions/runs/39477953523) committed the same bundle to `beta` after user approval. Google Play processing/review may still apply.
+
+The GitHub notes are published. Listing copy, screenshot files, and Play release-note text remain repository assets; the current testing workflow does not upload those store materials.
+
+English release notes: `store/release-notes/en-US/10004.txt`. Updated listing copy and phone/tablet Bookmarks screenshots replace the previous star terminology. The current publishing script does not upload listing copy or release-note files, so apply these explicitly when publishing. Tagging also triggers the configured automatic internal-testing workflow; open testing is a separate step after approval.
+
+Validation: 95 JVM tests, release lint (0 errors), signed APK/AAB assembly, APK and bundle signatures, embedded APK version/package, and 9 offline publisher tests passed. The preceding full phone emulator suite passed 50 tests (one optional screenshot exporter skipped). The final button-color/store-image changes are checked by fresh emulator captures.

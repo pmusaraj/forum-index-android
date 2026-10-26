@@ -12,7 +12,7 @@ For feature work and before releases:
 
 1. Review iOS commits since the last recorded comparison, including API models and tests, not just screenshots or commit titles. Pin the reviewed commit.
 2. Compare actual behavior with Android. Track additions, regressions, and intentional platform differences in [parity-checklist.md](parity-checklist.md).
-3. Implement the relevant behavior with Android lifecycle/cancellation handling and tests. Preserve API contracts, composite forum/topic identity, persistent contribution opt-out, local stars, and existing navigation state.
+3. Implement the relevant behavior with Android lifecycle/cancellation handling and tests. Preserve API contracts, composite forum/topic identity, persistent contribution opt-out, local bookmarks, and existing navigation state.
 4. Validate equivalent scenarios on a device/emulator and record what was tested and what remains unverified. Shared fixtures should exercise the same contract; platform-specific UI tests need not use identical gestures.
 5. Update this document's comparison baseline and checklist. Do not describe an untested or partial implementation as complete parity.
 
@@ -51,9 +51,9 @@ Matched iOS [52298db736](https://github.com/pmusaraj/forum-index-app/commit/5229
 
 - Same-origin HTTPS links open a new native Markdown preview in the current topic screen. Relative links resolve against the fetched page URL, including migrated domains. Post suffixes, queries, and fragments remain in the requested URL.
 - Header Back and Android system Back return through the preview history before leaving the topic. Readers and saved list positions are retained; returning does not refetch a loaded page. Close still returns directly to the feed.
-- The full-page toggle, share URL/title, and star action follow the currently displayed page. Linked-page titles come from the generated Markdown envelope; source-topic reply counts and dates are not reused for linked content.
+- The full-page toggle, share URL/title, and bookmark action follow the currently displayed page. Linked-page titles come from the generated Markdown envelope; source-topic reply counts and dates are not reused for linked content.
 - A linked-page failure stays in the preview with Retry and View full page actions. The initial feed topic retains its automatic full-page fallback.
-- Bookmarks for linked URLs have no Forum Index topic ID. They persist locally and do not send read/star contribution actions for the source topic or guess an API ID from a forum URL. Existing ID-based bookmarks remain compatible.
+- Bookmarks for linked URLs have no Forum Index topic ID. They persist locally and do not send read/bookmark contribution actions for the source topic or guess an API ID from a forum URL. Existing ID-based bookmarks remain compatible.
 - Other origins (including subdomains or different ports) still open externally. HTTP and unsupported URL schemes remain rejected.
 
 The forum-overview popover introduced in iOS `d1442e60d5` was subsequently ported in the evening comparison below. Linked preview history currently belongs to a retained topic page; activity recreation or paging far enough to dispose that page resets the history.
@@ -66,7 +66,7 @@ Reviewed iOS through [800c5bd](https://github.com/pmusaraj/forum-index-app/commi
 - Feed rows use leading 36 dp forum icons, compact reply counts with a speech bubble, consistent spacing, separators, and matching loading placeholders.
 - The forum name in the Markdown header opens site information, with a public forum-detail request, description, browser links, loading/error/retry, and HTTPS validation.
 - Full web topics sample the visible site's header background and adjust the top inset and status-bar contrast. Web content extends to the bottom edge; floating actions remain above navigation controls. Sampling is cancelled for hidden/disposed pages and never exposes a JavaScript-to-native bridge. Android samples while visible rather than installing the iOS mutation observer.
-- Contributions enroll automatically with a persistent generated Reader name and detected/editable device name. Explicit opt-out persists across launches, preserves local stars, and can be reversed in Settings. Existing credentials are reused. Enrollment failure retains access to the public feed.
+- Contributions enroll automatically with a persistent generated Reader name and detected/editable device name. Explicit opt-out persists across launches, preserves local bookmarks, and can be reversed in Settings. Existing credentials are reused. Enrollment failure retains access to the public feed.
 - Settings use the updated contribution disclosure, larger action buttons, and “Recommend a forum” section. Android verification behavior is unchanged, as requested.
 - Markdown uses theme-aware code backgrounds, smaller code text, subtle rules, `@username` labels, and legacy post headings inside recognized generated envelopes. Ordinary Markdown and fenced examples remain intact.
 
@@ -90,9 +90,34 @@ Compared the previous `8abf4cd` baseline with the adjacent repository's `origin/
 - `0ad929d`: reveal a compact title after 12 dp of upward scrolling once the original title is offscreen; hide it on downward scrolling or returning to the top. Android tracks consumed nested-scroll distance, so layout changes, programmatic list jumps, and unconsumed overscroll do not reveal it. Reset visibility when changing the active page; use immediate transitions without motion effects.
 - `b00a5d8`: add About to the feed's long-press actions, showing a selectable plain-text excerpt, community details with loading/retry, browser links, and an explicit Open topic action. Merely inspecting About does not mark a topic read.
 - `dfe0eb5`: decode optional Hacker News/Lobsters signals, skipping unknown or invalid entries individually. Show source icons and accessible descriptions in feed rows, and browser discussion links in the root Markdown preview. Linked previews do not reuse the source topic's signals.
-- Match the starred control's accent color and accessible Starred/Not starred state; retain native Android button behavior.
+- Match the bookmark control's accent color and accessible Bookmarked/Not bookmarked state; retain native Android button behavior.
 - `b3128cb`: Android already commits subject selection from `settledPage`, preserving per-subject list state. No additional pager change was needed.
 
 macOS sidebar/layout, keyboard commands, desktop colors/fonts, and Apple signing/TestFlight build changes are excluded. Android verification remains deferred. Existing reader/rendering differences above remain applicable.
 
 Validation: 80 JVM tests passed; debug APK, test APK, release APK, and release lint passed (0 errors, 30 warnings). On Pixel 6 / Android 13 (API 33), the initial full run passed 42 of 45 tests. After expanding the About sheet fully and using a bounded title-scroll gesture, all 14 recent-feature/reader tests passed on rerun, including the previously failing WebView gesture check and the added linked-signal isolation assertion. Thus all 45 distinct emulator scenarios passed across the two runs; this is not a claim of a single clean full-suite run. Physical-device/TalkBack checks and live external-discussion API/browser verification remain manual follow-up.
+
+## October 15 comparison (iOS 552a2d0)
+
+Pulled the adjacent iOS repository with `git pull --ff-only` and reviewed committed changes from `2b2c00d` through [552a2d0](https://github.com/pmusaraj/forum-index-app/commit/552a2d0). Both iOS and Android were already current with their upstream main branches.
+
+- Main is now public Trending (`feed=trending`). For You is a separate authenticated destination, enabled by `for_you_eligible`. Eligibility refreshes at launch and after successful read reports. Saved subject ordering/hiding is retained, including temporarily unavailable For You, and personalized cache/state is removed on lost access.
+- Stars are presented as bookmarks; existing storage and the server's `starred` action contract remain compatible. Newest saves appear first. New saves preserve forum capability and reader metadata; opening them uses the internal reader. Legacy saves without forum capability use the internal full-page view. URL-only saves never invent an index topic ID or submit a read for their source topic.
+- While the app is foregrounded, the newest 20 bookmarks are checked at most every five minutes for Discourse `last_posted_at`, skipping unread/unsupported entries without admitting older saves. Requests go directly to the forum without contributor credentials. Unread state is persisted, indicated in the header and list, and cleared on opening the bookmark.
+- Generated AI summaries can be expanded/collapsed above the first post. The parser only extracts summaries from the generated first-page envelope; ordinary user Markdown stays intact. No AI-generation request is made by the app.
+- The first post's author/avatar and absolute date appear below the topic title. The end-of-topic footer includes a browser link, reply totals and case-insensitive participant totals only when trustworthy. Later-page/individual-post previews and broken/repeated pagination do not claim a complete topic.
+- Settings include contributor feedback, a persistent draft, a 1,000 Unicode-code-point limit, app/OS metadata disclosure, and a stable request ID for retries. Success clears only the submitted draft; errors retain it. Android sends `platform=android`.
+
+Apple release tooling, macOS layout changes, and the vendored Textual selection crash fix do not apply to Android's Compose/Markwon renderer. Android attestation remains deferred. Validation results are recorded in the checklist; production feedback submission and live bookmark polling are not exercised by automated tests.
+
+## October 20 comparison (iOS/macOS e9f8254)
+
+Reviewed the adjacent Apple repository through `e9f8254` (build 33), including `86e10cb` and `650138a`.
+
+- New contributor nicknames use the same 64 verbs, 64 animal names, and two-digit suffix as Apple. Existing saved names remain intact.
+- Settings shows the contributor nickname instead of an editable hardware name, with “Generate new name” available while enrolled or opted out. Enrolled updates PATCH only `display_name`; failed or mismatched responses retain the previous name. Local regeneration preserves contribution opt-out. Enrollment and status refresh persist the server-confirmed name.
+- Settings includes “What is this app?” with the Apple description and a link to The Forum Index website. Hardware metadata, device verification, and installation identity remain separate from nicknames.
+- Android startup now shows the website wordmark across the available width with a small progress indicator until the initial feed resolves. Both appearances are supported; errors expose Retry and later feed refreshes retain the reader UI.
+- Empty linked-preview metadata rows are omitted, retaining the existing isolation of source-topic metadata.
+
+Following screenshot review and user approval, version 1.0.4 (10004) was published to GitHub, internal testing, and open testing (`beta`) on October 20.

@@ -13,10 +13,10 @@ The ongoing goal is feature and behavior parity with [the iOS app](https://githu
 ## Topics
 
 - [x] HTTPS-only in-app WebView
-- [x] Share, Star/Unstar, and Close controls
-- [x] Local persistent stars and opened-topic state
-- [x] Starred-topic list and external opening
-- [x] Long-press Star/Unstar and report actions
+- [x] Share, Bookmark/Remove bookmark, and Close controls
+- [x] Local persistent bookmarks and opened-topic state
+- [x] Bookmarked-topic list and external opening
+- [x] Long-press Bookmark/Remove bookmark and report actions
 
 ## September 24 iOS reader changes
 
@@ -35,7 +35,7 @@ The ongoing goal is feature and behavior parity with [the iOS app](https://githu
 
 - [x] Same-origin links open another Markdown preview, including individual replies
 - [x] Header/system Back restore the prior reader and scroll position
-- [x] Full-page, Share, and Star target the displayed linked page
+- [x] Full-page, Share, and Bookmark target the displayed linked page
 - [x] Linked bookmarks persist by URL without sending source-topic contribution actions
 - [x] Parse linked-page titles and remove generated “Showing post” metadata
 - [x] Linked loading errors offer Retry and View full page
@@ -45,8 +45,8 @@ The ongoing goal is feature and behavior parity with [the iOS app](https://githu
 
 - [x] Automatic public enrollment, persistent opt-out, and encrypted bearer token
 - [x] Contributor status and editable device name
-- [x] Read/star/report action submission while enabled
-- [x] Confirmed opt-out preserving local stars
+- [x] Read/bookmark/report action submission while enabled
+- [x] Confirmed opt-out preserving local bookmarks
 - [x] Android-neutral device-verification copy
 
 ## Verification
@@ -116,7 +116,7 @@ Validation: `testDebugUnitTest` passed (76 tests); `assembleDebug` passed. The e
 - [x] Optional external discussion signals with tolerant decoding and HTTPS validation
 - [x] Hacker News/Lobsters feed icons, accessibility labels, and root-preview browser links
 - [x] Linked previews omit source-topic discussion signals
-- [x] Starred control accent and accessible state
+- [x] Bookmark control accent and accessible state
 - [x] Confirm existing settled-page subject selection; exclude macOS and Apple release work
 
 Validation:
@@ -126,3 +126,32 @@ Validation:
 - Pixel 6 / Android 13: initial full run 42/45 passed; corrected About sheet and bounded title gesture, then 14/14 targeted recent-feature and reader tests passed. All 45 distinct scenarios passed across these runs, including the existing WebView gesture test on rerun.
 - New coverage includes malformed/unknown discussion signals, bold and heading metadata, title direction thresholds/reset, About retry and explicit opening, accessible feed signals, and linked previews omitting source-topic signals.
 - Physical-device/TalkBack and live discussion-link verification were not performed.
+
+## October 15 changes (iOS 552a2d0)
+
+- [x] Public Trending and separately eligible For You, including saved tab choices and access invalidation
+- [x] Bookmark terminology/icons, newest-first saves, legacy bookmark migration, and internal reader reopening
+- [x] Foreground reply tracking for the newest 20 saves, persisted unread state, and read clearing
+- [x] Generated AI-summary parsing and expand/collapse control
+- [x] First-author byline and complete-topic footer with conservative totals
+- [x] Contributor feedback with persisted draft, Unicode limit, metadata, and retry identity
+- [x] Preserve Android verification behavior and exclude Apple-specific renderer/release changes
+
+Validation:
+
+- Final `testDebugUnitTest`: 91 passed, covering summary-envelope boundaries, incomplete pagination, participant totals, bookmark polling limits/throttling, internal bookmark reopening, feedback retry identity, eligibility/hiding, and cancelled-feed access cleanup.
+- Full `connectedDebugAndroidTest` passed on Pixel 9 / Android 15. The opt-in store screenshot exporter was skipped. New UI scenarios cover summary toggling, author attribution, footer/browser control, unread bookmarks, and bookmark-sheet dismissal; storage coverage includes legacy saves and persisted reader metadata.
+- After the final absolute-date and access-cleanup refinements, the two new UI tests passed again, and all JVM tests were rerun.
+- Debug and release APK assembly passed. Release lint: 0 errors, 33 warnings and 1 hint (including optional SharedPreferences KTX suggestions).
+- Live feedback submission, live forum reply polling, physical devices, and TalkBack were not exercised. Release assembly is unsigned unless upload-signing credentials are provided.
+
+## October 20 changes (iOS/macOS e9f8254)
+
+- [x] Persistent friendly nicknames with the Apple word lists and two-digit suffix
+- [x] Regeneration while enrolled or opted out; preserve installation identity and hardware metadata
+- [x] PATCH only `display_name`, retain old names on failure, and synchronize confirmed names
+- [x] Settings introduction with the Forum Index website link
+- [x] Light/dark full-width startup wordmark until the initial feed resolves; preserve Retry and later refresh UI
+- [x] Omit empty linked-preview metadata rows
+
+Validation: 95 JVM tests passed. The full Pixel 9 / Android 15 suite passed 50 tests with one opt-in store exporter skipped. Release lint passed with 0 errors, 33 warnings, and 1 hint. Review screenshots use production composables with deterministic fixture data; live nickname updates were not submitted to the production server. Screenshots cover loading, Settings, and regenerated nicknames in both appearances. Version 1.0.4 (10004) was subsequently published to open testing after user approval on October 20.

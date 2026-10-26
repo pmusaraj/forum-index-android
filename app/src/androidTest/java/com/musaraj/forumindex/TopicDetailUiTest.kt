@@ -67,7 +67,7 @@ class TopicDetailUiTest {
         compose.onNodeWithTag("topic-preview-details").assertDoesNotExist()
         compose.onNodeWithTag("external-signal-lobsters").assertDoesNotExist()
         compose.onNodeWithTag("fixture-web").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Star").performClick()
+        compose.onNodeWithContentDescription("Bookmark").performClick()
         compose.runOnIdle {
             assertEquals(linkedUrl, selectedStar?.url)
             assertEquals("Linked title", selectedStar?.title)
@@ -80,7 +80,7 @@ class TopicDetailUiTest {
         val after = compose.onNodeWithTag("post-author-10").fetchSemanticsNode().boundsInRoot.top
         assertEquals(before, after, 1f)
         compose.onNodeWithTag("topic-header-back").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Star").performClick()
+        compose.onNodeWithContentDescription("Bookmark").performClick()
         compose.runOnIdle {
             assertEquals("https://forum.example/t/1", selectedStar?.url)
             assertEquals(1, selectedStar?.topicId)
@@ -147,8 +147,8 @@ class TopicDetailUiTest {
         compose.onNodeWithTag("topic-view-toggle").performClick()
         compose.onNodeWithTag("fixture-web").assertIsDisplayed()
         compose.onNodeWithTag("topic-forum-header").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Star").performClick()
-        compose.onNodeWithContentDescription("Unstar").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Bookmark").performClick()
+        compose.onNodeWithContentDescription("Remove bookmark").assertIsDisplayed()
         compose.onNodeWithTag("topic-view-toggle").performClick()
         compose.onNodeWithTag("topic-preview-title").assertIsDisplayed()
         compose.onNodeWithContentDescription("Close").performClick()

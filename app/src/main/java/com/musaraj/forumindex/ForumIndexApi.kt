@@ -53,12 +53,15 @@ data class Installation(
     val deviceName: String,
     val deviceVerified: Boolean,
     val trusted: Boolean,
+    val readCount: Int? = null,
+    val forYouEligible: Boolean = false,
 )
 data class Enrollment(val token: String, val installation: Installation)
 
 sealed interface Destination {
     val id: String
 
+    data object ForYou : Destination { override val id = "for-you-feed" }
     data object Main : Destination { override val id = "main-feed" }
     data class Subject(val subject: com.musaraj.forumindex.Subject) : Destination {
         override val id = "parent:${subject.slug}"
@@ -73,9 +76,11 @@ interface ForumIndexApi {
     fun createInstallation(displayName: String, deviceName: String): Enrollment
     fun fetchInstallation(token: String): Installation
     fun updateInstallation(deviceName: String, token: String): Installation
+    fun updateDisplayName(displayName: String, token: String): Installation { throw UnsupportedOperationException() }
     fun deleteInstallation(token: String)
     fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String)
     fun submitForum(url: String, token: String)
+    fun submitFeedback(submission: FeedbackSubmission, token: String) { throw UnsupportedOperationException() }
 }
 
 sealed class ForumIndexApiException(message: String) : Exception(message) {
@@ -87,6 +92,7 @@ sealed class ForumIndexApiException(message: String) : Exception(message) {
 
 class HttpForumIndexApi(
     baseUrl: String = PRODUCTION_BASE_URL,
+    private val devBuild: Boolean = BuildConfig.DEBUG,
     private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
 ) : ForumIndexApi {
     private val base = validateBase(baseUrl)
@@ -94,7 +100,7 @@ class HttpForumIndexApi(
     internal fun taxonomyUrl() = url("/api/v2/subjects", "window=5d&language=en")
     internal fun mainTopicsUrl(page: Int): URL {
         require(page > 0) { "page must be positive" }
-        return url("/api/v2/topics", "feed=main&limit=30&page=$page&language=en")
+        return url("/api/v2/topics", "feed=trending&limit=30&page=$page&language=en")
     }
     internal fun personalizedTopicsUrl(page: Int): URL {
         require(page > 0) { "page must be positive" }
@@ -122,7 +128,7 @@ class HttpForumIndexApi(
     }
 
     override fun fetchPersonalizedTopics(page: Int, token: String?): FeedEnvelope {
-        val body = request(personalizedTopicsUrl(page), "GET", token = token?.let(::checkedToken))
+        val body = request(personalizedTopicsUrl(page), "GET", token = checkedToken(requireNotNull(token)))
         return decode { ForumIndexJson.feed(body) }
     }
 
@@ -132,20 +138,45 @@ class HttpForumIndexApi(
     }
 
     override fun createInstallation(displayName: String, deviceName: String): Enrollment {
-        val body = JSONObject().put("display_name", displayName).put("device_name", deviceName)
+        val body = JSONObject().put("display_name", displayName).put("device_name", installationDeviceName(deviceName))
         val response = request(url("/api/v2/installations"), "POST", body = body.toString())
         return decode { ForumIndexJson.enrollment(response) }
     }
 
     override fun fetchInstallation(token: String): Installation {
         val body = request(url("/api/v2/installation"), "GET", token = checkedToken(token))
-        return decode { ForumIndexJson.installationEnvelope(body) }
+        val installation = decode { ForumIndexJson.installationEnvelope(body) }
+        if (installationDeviceName(installation.deviceName) == installation.deviceName) return installation
+        // Backfill older debug installations without making reads depend on a metadata update.
+        return try {
+            updateInstallation(installation.deviceName, token)
+        } catch (e: ForumIndexApiException.ExpiredAccess) {
+            throw e
+        } catch (_: ForumIndexApiException) {
+            installation // Retry on the next installation refresh.
+        }
+    }
+
+    private fun installationDeviceName(name: String): String {
+        if (!devBuild || name.startsWith("[dev] ")) return name
+        // The API limits labels to 100 Unicode code points, including the marker.
+        val end = name.offsetByCodePoints(0, minOf(94, name.codePointCount(0, name.length)))
+        return "[dev] " + name.substring(0, end)
     }
 
     override fun updateInstallation(deviceName: String, token: String): Installation {
         val body = request(
             url("/api/v2/installation"), "PATCH",
-            JSONObject().put("device_name", deviceName).toString(), checkedToken(token),
+            JSONObject().put("device_name", installationDeviceName(deviceName)).toString(), checkedToken(token),
+        )
+        return decode { ForumIndexJson.installationEnvelope(body) }
+    }
+
+    override fun updateDisplayName(displayName: String, token: String): Installation {
+        require(displayName.isNotBlank() && displayName.codePointCount(0, displayName.length) <= 100)
+        val body = request(
+            url("/api/v2/installation"), "PATCH",
+            JSONObject().put("display_name", displayName).toString(), checkedToken(token),
         )
         return decode { ForumIndexJson.installationEnvelope(body) }
     }
@@ -156,6 +187,11 @@ class HttpForumIndexApi(
             url("/api/v2/forum-submission"), "POST",
             JSONObject().put("url", url).toString(), checkedToken(token), forbiddenExpiresAccess = false,
         )
+    }
+
+    override fun submitFeedback(submission: FeedbackSubmission, token: String) {
+        require(submission.isValid)
+        request(url("/api/v2/feedback"), "POST", submission.toJson().toString(), checkedToken(token), forbiddenExpiresAccess = false)
     }
 
     override fun deleteInstallation(token: String) {
@@ -331,6 +367,7 @@ internal object ForumIndexJson {
     private fun JSONObject.installation() = Installation(
         getString("public_id"), getString("display_name"), getString("device_name"),
         optBoolean("device_verified", false), optBoolean("trusted", false),
+        if (isNull("read_count")) null else optInt("read_count"), optBoolean("for_you_eligible", false),
     )
 
     private fun JSONObject.optStringOrNull(key: String): String? =

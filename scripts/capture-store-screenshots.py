@@ -12,7 +12,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("device", choices=["phone", "tablet"])
     parser.add_argument("serial", help="adb device serial")
-    parser.add_argument("--only", choices=["01-discover", "02-reader", "03-community", "04-starred", "05-subjects"])
+    parser.add_argument("--only", choices=["01-discover", "02-reader", "03-community", "04-bookmarks", "05-subjects"])
     args = parser.parse_args()
     sdk = Path(os.environ.get("ANDROID_HOME", Path.home() / "Library/Android/sdk"))
     adb = [str(sdk / "platform-tools/adb"), "-s", args.serial]
@@ -39,8 +39,14 @@ def main():
         raise SystemExit("Screenshot capture did not pass; existing exports were not replaced.")
     output = ROOT / "store/screenshots" / args.device
     output.mkdir(parents=True, exist_ok=True)
-    run("pull", "/sdcard/Android/data/com.musaraj.forumindex/files/store-screenshots/.", str(output))
-    for path in sorted(output.glob("*/*.png")):
+    if args.only:
+        for appearance in ["light", "dark"]:
+            destination = output / appearance
+            destination.mkdir(parents=True, exist_ok=True)
+            run("pull", f"/sdcard/Android/data/com.musaraj.forumindex/files/store-screenshots/{appearance}/{args.only}.png", str(destination))
+    else:
+        run("pull", "/sdcard/Android/data/com.musaraj.forumindex/files/store-screenshots/.", str(output))
+    for path in sorted(output.glob(f"*/{args.only}.png" if args.only else "*/*.png")):
         subprocess.run(["magick", str(path), "-alpha", "off", "-strip", "PNG24:" + str(path)], check=True)
     print("Saved", output)
 

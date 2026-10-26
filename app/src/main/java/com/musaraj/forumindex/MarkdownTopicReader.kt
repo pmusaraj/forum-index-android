@@ -23,13 +23,21 @@ internal data class MarkdownReaderState(
     val posts: List<MarkdownPost> = emptyList(),
     val baseUrl: URL,
     val title: String? = null,
+    val summary: String? = null,
+    val startsTopic: Boolean = false,
+    val reachedLastPage: Boolean = false,
     val loaded: Boolean = false,
     val loading: Boolean = false,
     val error: String? = null,
     val nextPageUrl: URL? = null,
     val loadingMore: Boolean = false,
     val loadMoreError: String? = null,
-)
+) {
+    val hasCompleteTopic get() = startsTopic && reachedLastPage && posts.isNotEmpty() && !loadingMore && loadMoreError == null
+    val participantCount get() = if (hasCompleteTopic && posts.all { it.username != null })
+        posts.map { it.username!!.lowercase(java.util.Locale.ROOT) }.distinct().size else null
+    val replyCount get() = participantCount?.let { (posts.size - 1).coerceAtLeast(0) }
+}
 
 /** Owned by one detail page; callers launch work in that page's coroutine scope. */
 internal class MarkdownTopicReader(private val url: URL, private val source: TopicMarkdownSource) {
@@ -44,6 +52,7 @@ internal class MarkdownTopicReader(private val url: URL, private val source: Top
             currentCoroutineContext().ensureActive()
             val document = MarkdownTopicDocument.parse(page.markdown, page.url)
             mutableState.value = state.value.copy(
+                summary = document.summary, startsTopic = document.startsTopic, reachedLastPage = !document.hasNextPage,
                 posts = document.posts, baseUrl = page.url, title = document.title, loaded = true,
                 nextPageUrl = TopicPagination.nextUrl(document.nextPageUrl, page.url, TopicPagination.pageNumber(page.url) ?: 1),
             )
@@ -67,6 +76,7 @@ internal class MarkdownTopicReader(private val url: URL, private val source: Top
             val document = MarkdownTopicDocument.parse(page.markdown, page.url, current.posts.size)
             mutableState.value = state.value.copy(
                 posts = current.posts + document.posts,
+                reachedLastPage = !document.hasNextPage && document.posts.isNotEmpty(),
                 nextPageUrl = if (document.posts.isEmpty()) null else
                     TopicPagination.nextUrl(document.nextPageUrl, current.baseUrl, TopicPagination.pageNumber(next)!!),
             )

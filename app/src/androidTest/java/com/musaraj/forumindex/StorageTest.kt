@@ -59,6 +59,23 @@ class StorageTest {
         assertTrue((stored["stars"] as String).startsWith("["))
     }
 
+    @Test fun legacyStarsMigrateWithoutUnreadAndNewBookmarksKeepReaderMetadata() {
+        val raw = context.getSharedPreferences("forum_index", Context.MODE_PRIVATE)
+        raw.edit().putString("stars", """[{"title":"Old","url":"https://forum.test/t/1","forum_name":"Forum","topic_id":1},{"title":"Newer","url":"https://forum.test/t/2","forum_name":"Forum","topic_id":2}]""").commit()
+        val migrated = preferences.stars
+        assertEquals(listOf(2, 1), migrated.sortedByDescending { it.addedAt }.map { it.topicId })
+        assertTrue(migrated.none { it.hasUnreadReplies })
+        val forum = ForumSummary(7, "Forum", "forum", java.net.URL("https://forum.test"), null, true)
+        val bookmark = StarredTopic("Saved", "https://forum.test/t/3", "Forum", 3, 7,
+            addedAt = 100, lastReadAt = 200, latestReplyAt = 300, forum = forum,
+            publishedAt = java.time.Instant.parse("2026-10-14T12:00:00Z"), replyCount = 4,
+            externalSignals = listOf(ExternalSignal(ExternalSignalSource.LOBSTERS, java.net.URL("https://lobste.rs/s/test"))))
+        preferences.stars = migrated + bookmark
+        val restored = ForumIndexPreferences(context).stars.last()
+        assertEquals(bookmark, restored)
+        assertTrue(restored.hasUnreadReplies)
+    }
+
     @Test fun openedCompositeHelperUsesForumAndTopicIds() {
         preferences.markOpened(7, 41)
         assertTrue(preferences.isOpened(7, 41))

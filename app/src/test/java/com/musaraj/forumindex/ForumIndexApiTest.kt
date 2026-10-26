@@ -126,6 +126,20 @@ class ForumIndexApiTest {
         assertEquals(403, error.status)
     }
 
+    @Test fun nicknameUpdateOnlyPatchesDisplayName() {
+        lateinit var call: FakeConnection
+        val api = HttpForumIndexApi(connectionFactory = {
+            FakeConnection(it, """{"installation":{"public_id":"A1","display_name":"DancingOtter42","device_name":"Phone","device_verified":false,"trusted":true}}""").also { connection -> call = connection }
+        })
+        val result = api.updateDisplayName("DancingOtter42", "token")
+        assertEquals("DancingOtter42", result.displayName)
+        assertEquals("Phone", result.deviceName)
+        assertEquals("PATCH", call.requestMethod)
+        assertEquals("/api/v2/installation", call.url.path)
+        assertEquals(mapOf("display_name" to "DancingOtter42"), call.sentJson())
+        assertEquals("Bearer token", call.headers["Authorization"])
+    }
+
     @Test fun contributionRequestsUseExactMethodsPathsBodiesAndHeaders() {
         val calls = mutableListOf<FakeConnection>()
         val responses = ArrayDeque(listOf(
@@ -134,7 +148,7 @@ class ForumIndexApiTest {
             """{"installation":{"public_id":"A1","display_name":"Name","device_name":"Phone 2","device_verified":false,"trusted":true}}""",
             "{}", "{}"
         ))
-        val api = HttpForumIndexApi(connectionFactory = { url -> FakeConnection(url, responses.removeFirst()).also(calls::add) })
+        val api = HttpForumIndexApi(devBuild = false, connectionFactory = { url -> FakeConnection(url, responses.removeFirst()).also(calls::add) })
         val enrollment = api.createInstallation("Name", "Phone")
         api.fetchInstallation("token")
         api.updateInstallation("Phone 2", "token")
@@ -151,6 +165,45 @@ class ForumIndexApiTest {
         assertEquals("application/json", calls[0].headers["Content-Type"])
         assertNull(calls[1].headers["Content-Type"])
         assertEquals("Bearer token", calls[1].headers["Authorization"])
+    }
+
+    @Test fun debugInstallationNamesAreMarkedOnCreateAndRenameWithoutDuplicatingPrefix() {
+        val calls = mutableListOf<FakeConnection>()
+        val metadata = """{"public_id":"A1","display_name":"Name","device_name":"[dev] Phone","device_verified":false,"trusted":true}"""
+        val api = HttpForumIndexApi(devBuild = true, connectionFactory = {
+            FakeConnection(it, """{"token":"secret","installation":$metadata}""").also(calls::add)
+        })
+        api.createInstallation("Name", "Phone")
+        api.updateInstallation("Tablet", "token")
+        api.updateInstallation("[dev] Phone", "token")
+        api.updateInstallation("📱".repeat(100), "token")
+        assertEquals(mapOf("display_name" to "Name", "device_name" to "[dev] Phone"), calls[0].sentJson())
+        assertEquals(mapOf("device_name" to "[dev] Tablet"), calls[1].sentJson())
+        assertEquals(mapOf("device_name" to "[dev] Phone"), calls[2].sentJson())
+        assertEquals(mapOf("device_name" to "[dev] " + "📱".repeat(94)), calls[3].sentJson())
+    }
+
+    @Test fun debugInstallationRefreshBackfillsExistingDevicesOnlyOnce() {
+        val calls = mutableListOf<FakeConnection>()
+        val responses = ArrayDeque(listOf("Phone", "[dev] Phone", "[dev] Phone"))
+        val api = HttpForumIndexApi(devBuild = true, connectionFactory = {
+            FakeConnection(it, """{"installation":{"public_id":"A1","display_name":"Name","device_name":"${responses.removeFirst()}","device_verified":false,"trusted":true}}""").also(calls::add)
+        })
+        assertEquals("[dev] Phone", api.fetchInstallation("token").deviceName)
+        assertEquals("[dev] Phone", api.fetchInstallation("token").deviceName)
+        assertEquals(listOf("GET", "PATCH", "GET"), calls.map { it.requestMethod })
+        assertEquals(mapOf("device_name" to "[dev] Phone"), calls[1].sentJson())
+        assertTrue(calls.all { it.headers["Authorization"] == "Bearer token" })
+    }
+
+    @Test fun failedDebugBackfillDoesNotBreakInstallationReads() {
+        var requests = 0
+        val api = HttpForumIndexApi(devBuild = true, connectionFactory = {
+            requests++
+            FakeConnection(it, """{"installation":{"public_id":"A1","display_name":"Name","device_name":"Phone","device_verified":false,"trusted":true}}""", if (requests == 1) 200 else 500)
+        })
+        assertEquals("Phone", api.fetchInstallation("token").deviceName)
+        assertEquals(2, requests)
     }
 
     @Test fun rejectsInvalidBearerBeforeOpeningConnection() {

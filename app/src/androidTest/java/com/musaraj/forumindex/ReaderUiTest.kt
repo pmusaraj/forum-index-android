@@ -108,10 +108,10 @@ class ReaderUiTest {
             })
         }
         compose.onNodeWithContentDescription("Choose subjects").performClick()
-        compose.onNodeWithContentDescription("Move Main down").performClick()
+        compose.onNodeWithContentDescription("Move Trending down").performClick()
         compose.runOnIdle { assertEquals(listOf("parent:ai", "main-feed", "parent:sport"), updates) }
         compose.onNodeWithContentDescription("Toggle AI").performClick()
-        compose.onNodeWithContentDescription("Toggle Main").performClick()
+        compose.onNodeWithContentDescription("Toggle Trending").performClick()
         compose.runOnIdle { assertEquals(listOf("parent:sport"), updates) }
         compose.onNodeWithContentDescription("Toggle Sport").performClick()
         compose.onNodeWithContentDescription("Toggle Sport").assertIsOn()
@@ -119,12 +119,11 @@ class ReaderUiTest {
         compose.onNodeWithText("More subjects").assertIsDisplayed()
     }
 
-    @Test fun initialShowsTwentySkeletonRowsAndFailureRetries() {
+    @Test fun initialShowsLogoAndFailureRetries() {
         var state by mutableStateOf(baseState(FeedState.Initial))
         var retries = 0
         compose.setContent { ForumIndexReader(state, onRetry = { retries++ }) }
-        compose.onNodeWithTag("feed-main-feed").performScrollToIndex(19)
-        compose.onNodeWithTag("skeleton-row-19").assertIsDisplayed()
+        compose.onNodeWithTag("startup-loading").assertIsDisplayed()
         state = baseState(FeedState.Failed(emptyList(), "Offline"))
         compose.onNodeWithText("Offline").assertIsDisplayed()
         compose.onNodeWithText("Retry").performClick()

@@ -35,11 +35,11 @@
     "sha256": "a687288f03ee705609470051aa5c6432bdef148427868f1ac7255cc5133cb486"
   },
   {
-    "path": "screenshots/phone/light/04-starred.png",
+    "path": "screenshots/phone/light/04-bookmarks.png",
     "width": 1080,
     "height": 1920,
-    "bytes": 127261,
-    "sha256": "782133905d6c30865d34e5d93aa52fbca938aeb65b359ee7842d2d2c1401d00b"
+    "bytes": 132767,
+    "sha256": "95efe2f32feef9cb06f92a5b3839c3798104a407f1a64baaf0e565ceaee19cf0"
   },
   {
     "path": "screenshots/phone/light/05-subjects.png",
@@ -70,11 +70,11 @@
     "sha256": "0cc6ad5345af32dcaec470f471f9952483cbe58558527a9f11dd75f18e7611ab"
   },
   {
-    "path": "screenshots/phone/dark/04-starred.png",
+    "path": "screenshots/phone/dark/04-bookmarks.png",
     "width": 1080,
     "height": 1920,
-    "bytes": 126666,
-    "sha256": "0f8c8c77a73f52d16aedd995c8b6c97dcdd25017b8f20f2b5cf05c4f89068913"
+    "bytes": 132603,
+    "sha256": "aa516c6a6ae1188b427719f7f7cf3a822e13599a10ce8155cc66da5c878df2c5"
   },
   {
     "path": "screenshots/phone/dark/05-subjects.png",
@@ -105,11 +105,11 @@
     "sha256": "8c800efca3328d8ef8373cdc7abccd3c1c660dc8c849089b530fb852d8f00126"
   },
   {
-    "path": "screenshots/tablet/light/04-starred.png",
+    "path": "screenshots/tablet/light/04-bookmarks.png",
     "width": 1600,
     "height": 2560,
-    "bytes": 232197,
-    "sha256": "f155dd7904fee4cab4594d73c56a36ef0e3496629bfbc97dd25a07e09770fceb"
+    "bytes": 237907,
+    "sha256": "de50c4a13debc4c38dc8ad698f95103180e7ca1450e840ae8a972be7eb5f8a6c"
   },
   {
     "path": "screenshots/tablet/light/05-subjects.png",
@@ -140,11 +140,11 @@
     "sha256": "707ae0cdc845f0fdb4556b042e47008c9e0ce87d72fabc9ffd934a54251d3a27"
   },
   {
-    "path": "screenshots/tablet/dark/04-starred.png",
+    "path": "screenshots/tablet/dark/04-bookmarks.png",
     "width": 1600,
     "height": 2560,
-    "bytes": 180857,
-    "sha256": "f73f72357062cc91f53e8acbbbb9e2a1f4b4a20c63999e96d490692613c64cfb"
+    "bytes": 234131,
+    "sha256": "6c6a47010707f5d8a023effcffb33259b914b6451f21f518c68a82ff40bb0002"
   },
   {
     "path": "screenshots/tablet/dark/05-subjects.png",

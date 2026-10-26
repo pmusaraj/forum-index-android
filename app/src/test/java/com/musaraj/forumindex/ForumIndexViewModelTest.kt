@@ -43,34 +43,36 @@ class ForumIndexViewModelTest {
         assertEquals(listOf("main:1", "subject:ai:1"), api.calls)
     }
 
-    @Test fun mainPersonalizesOnlyWithEnrollmentAndClearsExpiredAccessBeforeFallback() = runTest(dispatcher.scheduler) {
-        val signedOutApi = FakeApi()
-        val signedOut = viewModel(signedOutApi)
-        signedOut.launch(); advanceUntilIdle()
-        assertEquals(listOf("main:1"), signedOutApi.calls)
+    @Test fun trendingIsPublicAndForYouRequiresEligibility() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val vm = viewModel(api, tokens = MemoryTokenStore(enrollment()))
+        vm.launch(); advanceUntilIdle()
+        assertEquals(listOf("main:1"), api.calls)
+        assertFalse(Destination.ForYou in vm.uiState.value.allDestinations)
 
-        val tokens = MemoryTokenStore(enrollment("reader-token"))
+        val eligible = enrollment().copy(installation = enrollment().installation.copy(forYouEligible = true))
         val expiredApi = FakeApi(expirePersonalized = true)
+        val tokens = MemoryTokenStore(eligible)
         val expired = viewModel(expiredApi, tokens = tokens)
         expired.launch(); advanceUntilIdle()
-
         assertNull(tokens.value)
-        assertNull(expired.uiState.value.contribution.enrollment)
-        assertEquals(listOf("for_you:1:reader-token", "main:1"), expiredApi.calls)
+        assertEquals(Destination.Main, expired.uiState.value.selectedDestination)
+        assertFalse(Destination.ForYou in expired.uiState.value.visibleDestinations)
+        assertTrue("for_you:1:token" in expiredApi.calls)
+        assertTrue("main:1" in expiredApi.calls)
     }
 
-    @Test fun expiredPersonalizedCleanupSurvivesFeedCancellation() = runTest(dispatcher.scheduler) {
+    @Test fun expiredForYouCleanupSurvivesFeedCancellation() = runTest(dispatcher.scheduler) {
         val runner = CancellationAwareRunner()
-        val tokens = MemoryTokenStore(enrollment("reader-token"))
+        val eligible = enrollment("reader-token").let { it.copy(installation = it.installation.copy(forYouEligible = true)) }
+        val tokens = MemoryTokenStore(eligible)
         val vm = viewModel(FakeApi(expirePersonalized = true), tokens = tokens, runner = runner)
         vm.launch()
         completeNext(runner) // persisted enrollment
         completeNext(runner) // taxonomy
-        completeNext(runner) // expired personalized request; cleanup is now independent
-
+        completeNext(runner) // expired For You request
         vm.refreshFeed(); runCurrent()
-        completeNext(runner) // token deletion survives refresh cancellation
-
+        completeNext(runner) // token deletion belongs to the ViewModel, not the cancelled feed
         assertNull(tokens.value)
         assertNull(vm.uiState.value.contribution.enrollment)
     }
@@ -325,7 +327,7 @@ class ForumIndexViewModelTest {
         val success = viewModel(FakeApi(), tokens = store)
         advanceUntilIdle()
         assertTrue(success.enroll(" Name ", " 📱 ")); advanceUntilIdle()
-        assertEquals(enrollment(), store.value)
+        assertEquals(enrollment().let { it.copy(installation = it.installation.copy(deviceName = "📱")) }, store.value)
     }
 
     @Test fun tokenLoadAndSaveUseBlockingRunnerButDeleteIsImmediate() = runTest(dispatcher.scheduler) {
@@ -359,7 +361,7 @@ class ForumIndexViewModelTest {
         store.value = stored; vm.reloadEnrollment(); advanceUntilIdle()
         vm.optOut(); advanceUntilIdle()
         assertNull(store.value)
-        assertEquals(listOf(star(7)), vm.stars.value)
+        assertEquals(listOf(7), vm.stars.value.map { it.topicId })
     }
 
     @Test fun optOutClearsLocalEnrollmentWhenServerIsUnavailable() = runTest(dispatcher.scheduler) {
@@ -466,7 +468,7 @@ class ForumIndexViewModelTest {
         val vm = viewModel(FakeApi(), prefs)
         advanceUntilIdle()
         vm.toggleStar(topic(2, 1)); vm.toggleStar(topic(2, 2))
-        assertEquals(listOf(1, 2), vm.stars.value.map { it.forumId })
+        assertEquals(listOf(2, 1), vm.stars.value.map { it.forumId })
         vm.toggleStar(topic(2, 1))
         assertEquals(listOf(2), vm.stars.value.map { it.forumId })
     }
@@ -485,7 +487,7 @@ class ForumIndexViewModelTest {
         assertTrue(prefs.isOpened(7, 4))
         assertEquals(
             listOf("action:4:read:true", "action:4:starred:false"),
-            api.calls,
+            api.calls.filter { it.startsWith("action:") },
         )
     }
 
@@ -503,9 +505,9 @@ class ForumIndexViewModelTest {
         advanceUntilIdle()
         val topic = topic(2)
         vm.markOpened(topic); vm.toggleStar(topic); advanceUntilIdle()
-        assertTrue(vm.isOpened(topic)); assertEquals(listOf(star(2)), vm.stars.value)
+        assertTrue(vm.isOpened(topic)); assertEquals(listOf(2), vm.stars.value.map { it.topicId })
         vm.optOut(); advanceUntilIdle()
-        assertEquals(listOf(star(2)), vm.stars.value)
+        assertEquals(listOf(2), vm.stars.value.map { it.topicId })
     }
 
     @Test fun linkedBookmarksAreLocalAndNeverReportTheSourceTopic() = runTest(dispatcher.scheduler) {
@@ -515,7 +517,7 @@ class ForumIndexViewModelTest {
         val linked = StarredTopic("Linked reply", "https://example.com/t/other/99/7#reply", "Forum")
         vm.toggleStar(linked); advanceUntilIdle()
         assertTrue(vm.isStarred(linked))
-        assertEquals(listOf(linked), vm.stars.value)
+        assertEquals(listOf(linked.url), vm.stars.value.map { it.url })
         vm.markOpened(linked); advanceUntilIdle()
         vm.removeStar(linked); advanceUntilIdle()
         assertTrue(vm.stars.value.isEmpty())
@@ -546,6 +548,121 @@ class ForumIndexViewModelTest {
         assertNull(vm.feedReturnTarget.value)
     }
 
+    @Test fun eligibleForYouCanBeHiddenWithoutReappearingOnTaxonomyRefresh() = runTest(dispatcher.scheduler) {
+        val eligible = enrollment().copy(installation = enrollment().installation.copy(forYouEligible = true))
+        val prefs = MemoryPreferences(visibleSubjectOrder = listOf(Destination.Main.id))
+        val vm = viewModel(FakeApi(), prefs, MemoryTokenStore(eligible))
+        vm.launch(); advanceUntilIdle()
+        assertEquals(listOf(Destination.ForYou, Destination.Main), vm.uiState.value.visibleDestinations)
+        vm.updateVisibleOrder(listOf(Destination.Main.id))
+        vm.refreshTaxonomy(); advanceUntilIdle()
+        assertEquals(listOf(Destination.Main), vm.uiState.value.visibleDestinations)
+    }
+
+    @Test fun bookmarkPollingCapsBeforeSkippingAndThrottles() = runTest(dispatcher.scheduler) {
+        val bookmarks = (1..25).map { id -> star(id).copy(addedAt = id.toLong(), lastReadAt = 100,
+            latestReplyAt = if (id == 25) 101 else null, url = if (id == 24) "https://example.com/about" else star(id).url) }
+        val requests = mutableListOf<String>()
+        val vm = ForumIndexViewModel(FakeApi(), MemoryPreferences(stars = bookmarks), MemoryTokenStore(), DispatcherCallRunner(dispatcher)) {
+            requests += it
+            java.time.Instant.ofEpochMilli(200)
+        }
+        advanceUntilIdle()
+        vm.refreshBookmarkReplies()
+        assertEquals(18, requests.size)
+        assertFalse(requests.any { it.endsWith("/5") || it.endsWith("/25") })
+        assertEquals(19, vm.stars.value.count { it.hasUnreadReplies })
+        vm.refreshBookmarkReplies()
+        assertEquals(18, requests.size)
+    }
+
+    @Test fun bookmarksOpenInternalReaderAndClearUnreadWithoutInventingTopicIds() = runTest(dispatcher.scheduler) {
+        val saved = topic(4).copy(forum = topic(4).forum.copy(supportsMarkdown = true)).bookmark()
+            .copy(lastReadAt = 1, latestReplyAt = 2)
+        val api = FakeApi()
+        val vm = viewModel(api, MemoryPreferences(stars = listOf(saved)), MemoryTokenStore(enrollment()))
+        advanceUntilIdle()
+        vm.openBookmark(saved); advanceUntilIdle()
+        assertEquals(4, vm.detailSession.value?.currentTopic?.id)
+        assertTrue(vm.detailSession.value!!.currentTopic.forum.supportsMarkdown)
+        assertFalse(vm.stars.value.single().hasUnreadReplies)
+        assertTrue("action:4:read:true" in api.calls)
+        vm.closeTopic()
+        val linked = saved.copy(topicId = null, forumId = null, url = "https://example.com/t/other/9")
+        api.calls.clear()
+        vm.openBookmark(linked); advanceUntilIdle()
+        assertNotNull(vm.detailSession.value)
+        assertFalse(api.calls.any { it.startsWith("action:") })
+        assertNull(vm.detailSession.value!!.currentTopic.bookmark().topicId)
+    }
+
+    @Test fun feedbackFailureKeepsDraftAndRetryUsesSameRequestId() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val vm = viewModel(api, tokens = MemoryTokenStore(enrollment()))
+        advanceUntilIdle()
+        val submission = FeedbackSubmission("same-request", "Hello", "1", "1", "15")
+        var cleared = false
+        api.feedbackFailure = true
+        vm.submitFeedback(submission) { cleared = true }; advanceUntilIdle()
+        assertFalse(cleared)
+        assertTrue(vm.uiState.value.feedbackResult!!.contains("draft is saved"))
+        api.feedbackFailure = false
+        vm.submitFeedback(submission) { cleared = true }; advanceUntilIdle()
+        assertTrue(cleared)
+        assertEquals(listOf("same-request", "same-request"), api.feedbackIds)
+    }
+
+    @Test fun nicknameRegenerationPreservesIdentityAndPersistsAcceptedName() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val prefs = MemoryPreferences()
+        val tokens = MemoryTokenStore(enrollment())
+        val vm = viewModel(api, prefs, tokens)
+        advanceUntilIdle()
+        val before = vm.uiState.value.contribution.enrollment!!
+        assertTrue(vm.regenerateNickname())
+        assertFalse(vm.regenerateNickname())
+        advanceUntilIdle()
+        val after = vm.uiState.value.contribution.enrollment!!
+        assertNotEquals(before.installation.displayName, after.installation.displayName)
+        assertEquals(before.installation.copy(displayName = after.installation.displayName), after.installation)
+        assertEquals(before.token, after.token)
+        assertEquals(after, tokens.value)
+        assertEquals(after.installation.displayName, prefs.contributorDisplayName)
+        assertEquals(prefs.contributorDisplayName, viewModel(api, prefs, tokens).defaultDisplayName)
+    }
+
+    @Test fun nicknameFailureAndRejectedResponseKeepPreviousName() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val prefs = MemoryPreferences()
+        val tokens = MemoryTokenStore(enrollment())
+        val vm = viewModel(api, prefs, tokens)
+        advanceUntilIdle()
+        val before = tokens.value
+        for (failure in listOf(true, false)) {
+            api.nicknameFailure = failure
+            api.rejectNickname = !failure
+            vm.regenerateNickname(); advanceUntilIdle()
+            assertEquals(before, tokens.value)
+            assertEquals(before!!.installation.displayName, prefs.contributorDisplayName)
+            assertEquals("Couldn’t update nickname. Try again.", vm.uiState.value.contribution.error)
+        }
+    }
+
+    @Test fun optedOutNicknamePersistsWithoutEnrollmentAndLegacyNamesAreKept() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val prefs = MemoryPreferences().apply { contributorDisplayName = "Reader-12345678"; contributionsOptedOut = true }
+        val vm = viewModel(api, prefs)
+        advanceUntilIdle()
+        assertEquals("Reader-12345678", vm.defaultDisplayName)
+        vm.regenerateNickname(); advanceUntilIdle()
+        assertNotEquals("Reader-12345678", vm.defaultDisplayName)
+        assertEquals(vm.defaultDisplayName, vm.uiState.value.contribution.nickname)
+        assertEquals(vm.defaultDisplayName, viewModel(api, prefs).defaultDisplayName)
+        assertTrue(prefs.contributionsOptedOut)
+        assertNull(vm.uiState.value.contribution.enrollment)
+        assertTrue(api.calls.isEmpty())
+    }
+
     @Test fun automaticEnrollmentWaitsForStorageAndUsesStableGeneratedIdentity() = runTest(dispatcher.scheduler) {
         val api = FakeApi()
         val prefs = MemoryPreferences(deviceNameOverride = "My tablet")
@@ -555,7 +672,7 @@ class ForumIndexViewModelTest {
         vm.launch("Detected phone")
         advanceUntilIdle()
         val name = prefs.contributorDisplayName!!
-        assertTrue(name.startsWith("Reader-"))
+        assertTrue(name.matches(Regex("[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}")))
         assertEquals(listOf("create:$name:My tablet"), api.calls.filter { it.startsWith("create:") })
         assertNotNull(vm.uiState.value.contribution.enrollment)
         assertEquals(name, vm.defaultDisplayName)
@@ -573,7 +690,7 @@ class ForumIndexViewModelTest {
         vm.launch("Phone"); advanceUntilIdle()
         vm.optOut(); advanceUntilIdle()
         assertTrue(prefs.contributionsOptedOut)
-        assertEquals(listOf(star(1)), prefs.stars)
+        assertEquals(listOf(1), prefs.stars.map { it.topicId })
         val restored = viewModel(api, prefs, tokens)
         restored.launch("Phone"); advanceUntilIdle()
         assertNull(restored.uiState.value.contribution.enrollment)
@@ -621,6 +738,7 @@ class ForumIndexViewModelTest {
 
     private class MemoryPreferences(
         override var visibleSubjectOrder: List<String> = emptyList(),
+        override var forYouIntroduced: Boolean = false,
         override var stars: List<StarredTopic> = emptyList(),
         override var openedTopicIds: Set<String> = emptySet(),
         override var deviceNameOverride: String? = null,
@@ -686,6 +804,12 @@ class ForumIndexViewModelTest {
     ) : ForumIndexApi {
         val calls = mutableListOf<String>()
         override fun fetchTaxonomy() = NavigationEnvelope("v2", "5d", subjects)
+        var feedbackFailure = false
+        val feedbackIds = mutableListOf<String>()
+        override fun submitFeedback(submission: FeedbackSubmission, token: String) {
+            feedbackIds += submission.requestId
+            if (feedbackFailure) throw ForumIndexApiException.Http(503)
+        }
         override fun fetchMainTopics(page: Int): FeedEnvelope { calls += "main:$page"; return mainFeeds.removeFirstOrNull() ?: feed() }
         override fun fetchPersonalizedTopics(page: Int, token: String?): FeedEnvelope {
             calls += "for_you:$page:$token"
@@ -693,9 +817,16 @@ class ForumIndexViewModelTest {
             return mainFeeds.removeFirstOrNull() ?: feed()
         }
         override fun fetchSubjectTopics(slug: String, page: Int): FeedEnvelope { calls += "subject:$slug:$page"; return feed(topic(slug.hashCode())) }
-        override fun createInstallation(displayName: String, deviceName: String): Enrollment { calls += "create:$displayName:$deviceName"; if (createFailure) throw ForumIndexApiException.Transport(); return enrollment() }
+        override fun createInstallation(displayName: String, deviceName: String): Enrollment { calls += "create:$displayName:$deviceName"; if (createFailure) throw ForumIndexApiException.Transport(); return enrollment().let { it.copy(installation = it.installation.copy(displayName = displayName, deviceName = deviceName)) } }
         override fun fetchInstallation(token: String): Installation { calls += "fetch:$token"; if (expireFetch) throw ForumIndexApiException.ExpiredAccess(); return enrollment(token).installation }
         override fun updateInstallation(deviceName: String, token: String): Installation { calls += "update:$deviceName"; return enrollment(token).installation.copy(deviceName = deviceName) }
+        var nicknameFailure = false
+        var rejectNickname = false
+        override fun updateDisplayName(displayName: String, token: String): Installation {
+            calls += "nickname:$displayName"
+            if (nicknameFailure) throw ForumIndexApiException.Transport()
+            return enrollment(token).installation.let { if (rejectNickname) it else it.copy(displayName = displayName) }
+        }
         override fun submitForum(url: String, token: String) { calls += "submit:$url:$token" }
         override fun deleteInstallation(token: String) {
             calls += "delete:$token"

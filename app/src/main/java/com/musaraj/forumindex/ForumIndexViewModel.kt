@@ -58,6 +58,7 @@ data class ContributionState(
     val loading: Boolean = true,
     val error: String? = null,
     val reports: Map<Int, ReportState> = emptyMap(),
+    val nickname: String? = null,
     val submittingForum: Boolean = false,
     val forumSubmissionMessage: String? = null,
 )
@@ -70,6 +71,8 @@ data class UiState(
     val feeds: Map<String, FeedState> = emptyMap(),
     val contribution: ContributionState = ContributionState(),
     val openedTopicIds: Set<String> = emptySet(),
+    val sendingFeedback: Boolean = false,
+    val feedbackResult: String? = null,
 )
 
 interface BlockingCallRunner {
@@ -85,10 +88,11 @@ class ForumIndexViewModel(
     private val preferences: PreferencesStore,
     private val tokenStore: EnrollmentStore,
     private val calls: BlockingCallRunner = DispatcherCallRunner(),
+    private val bookmarkReply: (String) -> java.time.Instant? = BookmarkActivity::latestReply,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(UiState(openedTopicIds = preferences.openedTopicIds))
     val uiState: StateFlow<UiState> = mutableUiState.asStateFlow()
-    private val mutableStars = MutableStateFlow(preferences.stars)
+    private val mutableStars = MutableStateFlow(preferences.stars.sortedByDescending { it.addedAt }.also { preferences.stars = it })
     val stars: StateFlow<List<StarredTopic>> = mutableStars.asStateFlow()
     private val mutableDetailSession = MutableStateFlow<TopicDetailSession?>(null)
     val detailSession = mutableDetailSession.asStateFlow()
@@ -102,6 +106,35 @@ class ForumIndexViewModel(
         mutableFeedReturnTarget.value = null
         mutableDetailSession.value = session
         markOpened(topic)
+    }
+
+    fun openBookmark(bookmark: StarredTopic) {
+        val url = try { validTopicUrl(java.net.URL(bookmark.url)) } catch (_: Exception) { null } ?: return
+        val forum = bookmark.forum ?: ForumSummary(bookmark.forumId ?: 0, bookmark.forumName, "", url, null, false)
+        val topic = Topic(bookmark.topicId ?: 0, bookmark.title, url, null, forum, bookmark.publishedAt, bookmark.replyCount, bookmark.externalSignals)
+        mutableFeedReturnTarget.value = null
+        mutableDetailSession.value = TopicDetailSession.create(listOf(topic), topic, "bookmarks")
+        markOpened(bookmark)
+    }
+
+    private var lastBookmarkCheck: Long? = null
+    private var checkingBookmarks = false
+    suspend fun refreshBookmarkReplies() {
+        val now = System.currentTimeMillis()
+        if (checkingBookmarks || lastBookmarkCheck?.let { now - it < 300_000 } == true) return
+        checkingBookmarks = true
+        lastBookmarkCheck = now
+        try {
+            for (bookmark in mutableStars.value.take(20).filter { !it.hasUnreadReplies && BookmarkActivity.endpoint(it.url) != null }) {
+                try {
+                    val latest = calls.run { bookmarkReply(bookmark.url) } ?: continue
+                    saveStars(mutableStars.value.map {
+                        if (it.url == bookmark.url && it.addedAt == bookmark.addedAt) it.copy(latestReplyAt = latest.toEpochMilli()) else it
+                    })
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { /* One unavailable forum does not stop the others. */ }
+            }
+        } finally { checkingBookmarks = false }
     }
 
     fun selectDetailTopic(index: Int) {
@@ -133,7 +166,7 @@ class ForumIndexViewModel(
 
     private var automaticEnrollmentDevice: String? = null
     val defaultDisplayName: String
-        get() = preferences.contributorDisplayName ?: "Reader-${java.util.UUID.randomUUID().toString().take(8)}".also {
+        get() = preferences.contributorDisplayName ?: DeviceNickname.generate().also {
             preferences.contributorDisplayName = it
         }
 
@@ -173,12 +206,17 @@ class ForumIndexViewModel(
     }
 
     private fun applyTaxonomy(subjects: List<Subject>) {
-        val destinations = listOf(Destination.Main) + subjects.map(Destination::Subject)
+        val destinations = (if (mutableUiState.value.contribution.enrollment?.installation?.forYouEligible == true) listOf(Destination.ForYou, Destination.Main) else listOf(Destination.Main)) + subjects.map(Destination::Subject)
         val byId = destinations.associateBy(Destination::id)
         val stored = preferences.visibleSubjectOrder.distinct().mapNotNull(byId::get)
-        val visible = (if (preferences.visibleSubjectOrder.isEmpty()) {
+        val introduceForYou = Destination.ForYou in destinations && !preferences.forYouIntroduced
+        val visible = ((if (Destination.ForYou in destinations && (preferences.visibleSubjectOrder.isEmpty() || introduceForYou)) listOf(Destination.ForYou) else emptyList()) + (if (preferences.visibleSubjectOrder.isEmpty()) {
             DEFAULT_SLUGS.mapNotNull { slug -> if (slug == "main") Destination.Main else byId["parent:$slug"] }
-        } else stored).ifEmpty { listOf(Destination.Main) }
+        } else if (introduceForYou) stored.filterNot { it == Destination.ForYou } else stored)).ifEmpty { listOf(Destination.Main) }
+        if (introduceForYou) {
+            preferences.forYouIntroduced = true
+            if (preferences.visibleSubjectOrder.isNotEmpty()) preferences.visibleSubjectOrder = visible.map { it.id }
+        }
         val selected = mutableUiState.value.selectedDestination?.id?.let(byId::get)?.takeIf { candidate -> visible.any { it.id == candidate.id } }
             ?: visible.first()
         val feeds = destinations.associate { it.id to (mutableUiState.value.feeds[it.id] ?: FeedState.Initial) }
@@ -204,7 +242,11 @@ class ForumIndexViewModel(
     fun updateVisibleOrder(ids: List<String>) {
         val byId = mutableUiState.value.allDestinations.associateBy(Destination::id)
         val visible = ids.distinct().mapNotNull(byId::get).ifEmpty { listOf(byId[Destination.Main.id] ?: return) }
-        preferences.visibleSubjectOrder = visible.map(Destination::id)
+        val saved = visible.map(Destination::id).toMutableList()
+        val oldForYouIndex = preferences.visibleSubjectOrder.indexOf(Destination.ForYou.id)
+        if (Destination.ForYou.id !in byId && oldForYouIndex >= 0) saved.add(oldForYouIndex.coerceAtMost(saved.size), Destination.ForYou.id)
+        preferences.visibleSubjectOrder = saved
+        if (Destination.ForYou.id in byId) preferences.forYouIntroduced = true
         val current = mutableUiState.value.selectedDestination
         mutableUiState.value = mutableUiState.value.copy(visibleDestinations = visible)
         if (current == null || visible.none { it.id == current.id }) select(visible.first()) else prefetchNext()
@@ -417,6 +459,40 @@ class ForumIndexViewModel(
         }
     }
 
+    fun regenerateNickname(): Boolean {
+        val state = mutableUiState.value.contribution
+        if (state.loading || state.submittingForum) return false
+        val currentName = state.enrollment?.installation?.displayName ?: defaultDisplayName
+        val name = generateSequence { DeviceNickname.generate() }.first { it != currentName }
+        val enrollment = state.enrollment
+        if (enrollment == null) {
+            preferences.contributorDisplayName = name
+            mutableUiState.value = mutableUiState.value.copy(
+                contribution = state.copy(nickname = name, error = null),
+            )
+            return true
+        }
+        val generation = ++contributionGeneration
+        contributionLoading()
+        viewModelScope.launch {
+            try {
+                val installation = calls.run { api.updateDisplayName(name, enrollment.token) }
+                if (!contributionMatches(generation, enrollment.token)) return@launch
+                check(installation.displayName == name) { "Nickname was not saved" }
+                val updated = enrollment.copy(installation = installation)
+                calls.run { tokenStore.save(updated) }
+                if (contributionMatches(generation, enrollment.token)) contributionSuccess(updated)
+            } catch (_: ForumIndexApiException.ExpiredAccess) {
+                expireEnrollment(generation, enrollment.token)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (contributionMatches(generation, enrollment.token)) contributionFailure("Couldn’t update nickname. Try again.")
+            }
+        }
+        return true
+    }
+
     fun updateDevice(deviceName: String): Boolean {
         val device = validLabel(deviceName) ?: return false
         if (mutableUiState.value.contribution.loading || mutableUiState.value.contribution.submittingForum) return false
@@ -459,7 +535,10 @@ class ForumIndexViewModel(
                 setReport(topicId, ReportState.Running)
                 try {
                     calls.run { api.setTopicAction(topicId, kind, active, enrollment.token) }
-                    if (contributionMatches(generation, enrollment.token)) setReport(topicId, ReportState.Succeeded)
+                    if (contributionMatches(generation, enrollment.token)) {
+                        setReport(topicId, ReportState.Succeeded)
+                        if (kind == "read" && active) refreshReadEligibility(generation, enrollment.token)
+                    }
                 } catch (_: ForumIndexApiException.ExpiredAccess) {
                     if (expireEnrollment(generation, enrollment.token)) setReport(topicId, ReportState.NeedsEnrollment)
                 } catch (_: CancellationException) {
@@ -470,6 +549,33 @@ class ForumIndexViewModel(
             }
         }
         return true
+    }
+
+    fun submitFeedback(submission: FeedbackSubmission, onSuccess: () -> Unit) {
+        val token = currentToken() ?: return
+        if (!submission.isValid || mutableUiState.value.sendingFeedback) return
+        val generation = contributionGeneration
+        mutableUiState.value = mutableUiState.value.copy(sendingFeedback = true, feedbackResult = null)
+        viewModelScope.launch {
+            var result: String
+            try {
+                calls.run { api.submitFeedback(submission, token) }
+                onSuccess()
+                result = "Thanks for your feedback. Your message has been sent to the app admins."
+            } catch (_: ForumIndexApiException.ExpiredAccess) {
+                expireEnrollment(generation, token)
+                result = "Your contributor access expired. Enable contributions in Settings. Your draft is saved."
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                result = when ((e as? ForumIndexApiException.Http)?.status) {
+                    404, 405, 501, 503 -> "Feedback isn’t available yet. Your draft is saved; please try again later."
+                    429 -> "Too many messages. Your draft is saved; please try again later."
+                    400, 413, 422 -> "The message couldn’t be accepted. Please check it and try again."
+                    else -> "Couldn’t send feedback. Your draft is saved; please try again."
+                }
+            } finally { mutableUiState.value = mutableUiState.value.copy(sendingFeedback = false) }
+            mutableUiState.value = mutableUiState.value.copy(feedbackResult = result)
+        }
     }
 
     fun submitForum(url: String): Boolean {
@@ -511,6 +617,7 @@ class ForumIndexViewModel(
     }
 
     fun markOpened(topic: Topic) {
+        saveStars(mutableStars.value.map { if (it.url == topic.url?.toString()) it.copy(lastReadAt = System.currentTimeMillis()) else it })
         markOpened(topic.forum.id, topic.id)
     }
 
@@ -529,7 +636,8 @@ class ForumIndexViewModel(
     fun toggleStar(star: StarredTopic) {
         val url = try { validTopicUrl(java.net.URL(star.url)) } catch (_: Exception) { null } ?: return
         val active = !isStarred(star)
-        saveStars(if (active) mutableStars.value + star.copy(url = url.toString())
+        val now = maxOf(System.currentTimeMillis(), (mutableStars.value.maxOfOrNull { it.addedAt } ?: 0) + 1)
+        saveStars(if (active) mutableStars.value + star.copy(url = url.toString(), addedAt = now, lastReadAt = now, latestReplyAt = null)
             else mutableStars.value.filterNot { it.sameIdentity(star) })
         if (mutableUiState.value.contribution.enrollment != null) star.topicId?.let { report(it, "starred", active) }
     }
@@ -539,7 +647,8 @@ class ForumIndexViewModel(
         val current = mutableStars.value
         val active = current.none { it.matches(topic) }
         val updated = if (active) {
-            current + StarredTopic(topic.title, url.toString(), topic.forum.name, topic.id, topic.forum.id)
+            val now = maxOf(System.currentTimeMillis(), (current.maxOfOrNull { it.addedAt } ?: 0) + 1)
+            current + topic.bookmark().copy(addedAt = now, lastReadAt = now)
         } else current.filterNot { it.matches(topic) }
         saveStars(updated)
         if (mutableUiState.value.contribution.enrollment != null) report(topic.id, "starred", active)
@@ -553,6 +662,7 @@ class ForumIndexViewModel(
     }
 
     fun markOpened(star: StarredTopic) {
+        saveStars(mutableStars.value.map { if (it.sameIdentity(star)) it.copy(lastReadAt = System.currentTimeMillis()) else it })
         if (star.forumId != null && star.topicId != null) preferences.markOpened(star.forumId, star.topicId)
         mutableUiState.value = mutableUiState.value.copy(openedTopicIds = preferences.openedTopicIds)
         if (mutableUiState.value.contribution.enrollment != null) star.topicId?.let { report(it, "read", true) }
@@ -560,7 +670,7 @@ class ForumIndexViewModel(
 
     private fun saveStars(updated: List<StarredTopic>) {
         preferences.stars = updated
-        mutableStars.value = updated
+        mutableStars.value = updated.sortedByDescending { it.addedAt }
     }
 
     fun optOut() {
@@ -599,18 +709,53 @@ class ForumIndexViewModel(
         )
     }
 
+    private var eligibilityRefresh = 0
+    private fun refreshReadEligibility(generation: Int, token: String) {
+        val refresh = ++eligibilityRefresh
+        viewModelScope.launch {
+            try {
+                val installation = calls.run { api.fetchInstallation(token) }
+                if (refresh == eligibilityRefresh && contributionMatches(generation, token)) {
+                    val updated = Enrollment(token, installation)
+                    tokenStore.save(updated)
+                    val old = mutableUiState.value.contribution.enrollment
+                    mutableUiState.value = mutableUiState.value.copy(contribution = mutableUiState.value.contribution.copy(enrollment = updated))
+                    syncEligibility(old, updated)
+                }
+            } catch (_: ForumIndexApiException.ExpiredAccess) { expireEnrollment(generation, token) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Retry on a later read. */ }
+        }
+    }
+
     private fun contributionSuccess(enrollment: Enrollment?) {
+        val old = mutableUiState.value.contribution.enrollment
+        enrollment?.installation?.displayName?.let { preferences.contributorDisplayName = it }
+
         mutableUiState.value = mutableUiState.value.copy(
             contribution = mutableUiState.value.contribution.copy(
                 enrollment = enrollment, loading = false, error = null, submittingForum = false,
+                nickname = preferences.contributorDisplayName,
             ),
         )
+        syncEligibility(old, enrollment)
     }
 
-    private fun contributionFailure() {
+    private fun syncEligibility(old: Enrollment?, enrollment: Enrollment?) {
+        if ((old?.installation?.forYouEligible == true) != (enrollment?.installation?.forYouEligible == true) ||
+            (old?.token != enrollment?.token && old?.installation?.forYouEligible == true)) {
+            if (mutableUiState.value.selectedDestination == Destination.ForYou) cancelFeed()
+            prefetchJob?.cancel()
+            prefetchGeneration++
+            setFeed(Destination.ForYou.id, FeedState.Initial)
+            (mutableUiState.value.taxonomy as? TaxonomyState.Loaded)?.let { applyTaxonomy(it.subjects) }
+        }
+    }
+
+    private fun contributionFailure(message: String = REQUEST_FAILED) {
         mutableUiState.value = mutableUiState.value.copy(
             contribution = mutableUiState.value.contribution.copy(
-                loading = false, error = REQUEST_FAILED, submittingForum = false,
+                loading = false, error = message, submittingForum = false,
             ),
         )
     }
@@ -644,21 +789,14 @@ class ForumIndexViewModel(
     }
 
     private suspend fun fetch(destination: Destination, page: Int) = when (destination) {
-        Destination.Main -> {
-            val expectedGeneration = contributionGeneration
-            val token = currentToken()
-            if (token == null) {
-                calls.run { api.fetchMainTopics(page) }
-            } else {
-                try {
-                    calls.run { api.fetchPersonalizedTopics(page, token) }
-                } catch (_: ForumIndexApiException.ExpiredAccess) {
-                    viewModelScope.launch { expireEnrollment(expectedGeneration, token) }
-                    throw CancellationException()
-                } catch (error: ForumIndexApiException.Http) {
-                    if (error.status != 400) throw error
-                    calls.run { api.fetchMainTopics(page) }
-                }
+        Destination.Main -> calls.run { api.fetchMainTopics(page) }
+        Destination.ForYou -> {
+            val token = currentToken() ?: throw CancellationException()
+            val generation = contributionGeneration
+            try { calls.run { api.fetchPersonalizedTopics(page, token) } }
+            catch (_: ForumIndexApiException.ExpiredAccess) {
+                viewModelScope.launch { expireEnrollment(generation, token) }
+                throw CancellationException()
             }
         }
         is Destination.Subject -> calls.run { api.fetchSubjectTopics(destination.subject.slug, page) }

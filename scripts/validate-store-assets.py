@@ -6,7 +6,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1] / "store"
-names = ["01-discover", "02-reader", "03-community", "04-starred", "05-subjects"]
+names = ["01-discover", "02-reader", "03-community", "04-bookmarks", "05-subjects"]
 expected = {"graphics/icon.png": (512, 512), "graphics/feature-graphic.png": (1024, 500)}
 for device, size in [("phone", (1080, 1920)), ("tablet", (1600, 2560))]:
     for appearance in ["light", "dark"]:

@@ -12,11 +12,16 @@ internal data class MarkdownPost(
 )
 
 /** Parses only Discourse's generated envelope; post Markdown remains intact. */
-internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nextPageUrl: URL?, val title: String? = null) {
+internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nextPageUrl: URL?, val title: String? = null, val summary: String? = null,
+    val startsTopic: Boolean = false, val hasNextPage: Boolean = false) {
     companion object {
         fun parse(markdown: String, baseUrl: URL, postIdOffset: Int = 0): MarkdownTopicDocument {
             val lines = markdown.replace("\r\n", "\n").split('\n')
             val hasEnvelope = isEnvelope(lines)
+            val envelope = lines.drop(1).takeWhile { it.isEmpty() || fields.any(it::startsWith) }
+            val startsTopic = hasEnvelope && envelope.none { it.startsWith("**Showing post:**") ||
+                (it.startsWith("**Page:**") && !Regex("""^\*\*Page:\*\* 1(?:\D.*)?$""").matches(it)) }
+            var summary: String? = null
             val footer = mutableSetOf<Int>()
             if (hasEnvelope) {
                 for (index in lines.indices.reversed()) {
@@ -37,8 +42,15 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
 
             fun appendPost(beforeMetadata: Boolean) {
                 var content = body.joinToString("\n").trim()
-                if (beforeMetadata && content.endsWith("\n\n---")) content = content.dropLast(5)
-                if (!hasMetadata && posts.isEmpty()) content = removeEnvelope(content)
+                if (beforeMetadata && hasMetadata && content.endsWith("\n\n---")) content = content.dropLast(5)
+                if (!hasMetadata && posts.isEmpty()) {
+                    content = removeEnvelope(content)
+                    if (startsTopic && beforeMetadata && content.lineSequence().firstOrNull() == "## AI-generated summary") {
+                        summary = content.removePrefix("## AI-generated summary").trim().takeIf { it.isNotEmpty() }
+                        body.clear()
+                        return
+                    }
+                }
                 if (hasMetadata || content.isNotBlank()) {
                     posts += MarkdownPost(postIdOffset + posts.size, author, avatar, date, content)
                 }
@@ -100,7 +112,9 @@ internal data class MarkdownTopicDocument(val posts: List<MarkdownPost>, val nex
             }
             appendPost(beforeMetadata = false)
             val title = if (hasEnvelope) lines.first().removePrefix("# ").trim().takeIf { it.isNotEmpty() } else null
-            return MarkdownTopicDocument(posts, next, title)
+            return MarkdownTopicDocument(posts, next, title, summary,
+                startsTopic && footer.none { lines[it].startsWith("[Previous page]") },
+                footer.any { lines[it].startsWith("[Next page]") })
         }
 
         private val legacyMetadata = Regex("""^## Post [0-9]+ by @([^\s]+) — ([0-9]{4}-[^\s]+)$""")

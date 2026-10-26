@@ -14,7 +14,7 @@ private fun samePage(first: URL, second: URL) = sameTopicOrigin(first, second) &
 
 internal class MarkdownPreviewPage(val id: Int, val url: URL, val reader: MarkdownTopicReader) {
     fun bookmark(root: Topic): StarredTopic = if (samePage(url, root.url!!)) root.bookmark() else
-        StarredTopic(reader.state.value.title ?: "Linked page", url.toString(), root.forum.name)
+        StarredTopic(reader.state.value.title ?: "Linked page", url.toString(), root.forum.name, forum = root.forum)
 }
 
 /** Retains loaded readers on Back; linked URLs never borrow the feed topic's API identity. */
@@ -41,4 +41,4 @@ internal class MarkdownPreviewHistory(url: URL, private val source: TopicMarkdow
     }
 }
 
-internal fun Topic.bookmark() = StarredTopic(title, url.toString(), forum.name, id, forum.id)
+internal fun Topic.bookmark() = StarredTopic(title, url.toString(), forum.name, id.takeIf { it > 0 }, forum.id.takeIf { it > 0 }, forum = forum, publishedAt = publishedAt, replyCount = replyCount, externalSignals = externalSignals)
