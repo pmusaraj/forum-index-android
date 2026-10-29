@@ -183,3 +183,19 @@ An existing WebView swipe check failed intermittently during an intermediate
 rerun and passed in the final run. Store screenshot capture was skipped in the
 initial full run because it requires its explicit capture flag. Live-forum and
 physical-device/TalkBack checks remain manual follow-up.
+
+## October 29 changes (iOS 2986179)
+
+- [x] Optional backend feed discovery, one-time introduction, saved ordering/hiding, and safe public/personalized requests
+- [x] “Not Interesting for Me” reporting
+- [x] Render exported GitHub oneboxes with expand/collapse controls; preserve quotes and fenced code
+- [x] Converted Markdown reader sources, explicit opt-outs, legacy fallback, and bookmark persistence
+- [x] Converted unread bookmarks resume the original forum post and can return to the preview
+- [x] Bounded initial-document caching, background parsing, selected-topic resume, and on-demand WebViews
+- [x] Host-scoped Retry-After handling
+- [x] Preserve existing linked-image viewing and feed/history scroll restoration
+- [ ] Live converter/feed-discovery smoke tests and physical-device/TalkBack checks
+
+Validation: 115 JVM tests passed on the final revision. The full Pixel 9 / Android 15 suite passed 59 tests with the opt-in store screenshot exporter skipped. After the final personalized-feed opt-out and asynchronous image-layout refinements, all five affected recent-feature UI tests passed again. Release APK assembly and release lint passed (0 errors, 34 warnings, 2 hints). Coverage includes feed discovery and hidden choices, public versus personalized credentials, report submission, reader-source decoding and persistence, converted unread resume, onebox parsing and expansion, linked-image clicks, cache expiration/eviction, retry delays, and existing scrolling/history regressions. Production reports were not submitted; live discovery/converter, physical-device, and TalkBack checks remain unverified.
+
+Physical-device follow-up: the user smoke-tested the separate Forum Index Test build on a Samsung SM-A145M and confirmed it looked good before authorizing release. The existing Google Play app and its data were preserved. This does not replace the outstanding TalkBack and targeted live-service checks.

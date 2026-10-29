@@ -24,6 +24,25 @@ class BookmarkResumeUiTest {
             "## Post $it by @alice — 2026-10-21T00:00:0${it}Z\n\n" + "Reply $it long text. ".repeat(180)
         } + if (second) "\n\n[Previous page]($url.md?page=1)" else "\n\n[Next page]($url.md?page=2)"
 
+    @Test fun convertedBookmarkResumesOriginalPostAndCanReturnToPreview() {
+        val converted = topic.copy(readerMarkdownUrl = URL("https://index.test/markdown/42"))
+        val requests = mutableListOf<String>()
+        var fullPage: URL? = null
+        compose.setContent {
+            ForumIndexTheme {
+                TopicDetailScreen(TopicDetailSession.create(listOf(converted), converted, "bookmarks")!!,
+                    isStarred = { true }, onSelect = {}, onToggleStar = {}, onDismiss = {},
+                    savedBookmark = { saved.copy(readerMarkdownUrl = converted.readerMarkdownUrl) }, resumeClient = resume,
+                    source = { requests += it.toString(); MarkdownPage(page(false), it) },
+                    webContent = { url, _, _ -> SideEffect { fullPage = url }; Box(Modifier.fillMaxSize()) })
+            }
+        }
+        compose.runOnIdle { assertEquals("https://forum.test/t/42/3", fullPage.toString()); assertTrue(requests.isEmpty()) }
+        compose.onNodeWithTag("topic-view-toggle").performClick()
+        compose.onNodeWithTag("topic-preview-title").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf(converted.readerMarkdownUrl.toString()), requests) }
+    }
+
     @Test fun resumesAtUnreadAndRecordsOnlyAfterScrollingThenReturnsToBeginning() {
         val read = mutableListOf<Int?>()
         compose.setContent {

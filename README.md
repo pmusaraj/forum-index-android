@@ -39,6 +39,8 @@ The app reads the existing Forum Index public API, keeps feed caches in memory, 
 
 The public Trending feed is separate from For You, which appears when the server marks your contributor profile eligible. Bookmarks open inside the app, and the newest 20 saves are checked for new replies while the app is open. Supported previews offer collapsible AI summaries, author bylines, and an end-of-topic footer. Settings include nickname regeneration, an introduction linking to the website, and feedback with a saved draft and retry support. Startup displays the full-width wordmark while the first feed loads.
 
+Recent iOS parity additions include server-discovered feeds with persistent tab choices, “Not Interesting for Me” reports, expandable GitHub oneboxes, and converted Markdown previews for additional forums. Bookmarks preserve the reader source and original sharing URL. Converted unread bookmarks resume on the original forum page. Initial reader documents use a bounded two-minute cache; full web pages load on demand, and Markdown requests respect server retry delays.
+
 ## Typography
 
 The interface and native Markdown reader bundle Source Sans 3 from [Adobe's font repository](https://github.com/adobe-fonts/source-sans/tree/87b37a2daaed80fcb8e8ccb0085c4d72ddade12e), including regular, medium, semibold, bold, and their italics. The wordmark retains its original typeface. The SIL Open Font License is included in `app/src/main/assets/licenses/source-sans-3.txt`.

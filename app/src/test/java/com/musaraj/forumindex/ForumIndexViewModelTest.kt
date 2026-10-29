@@ -26,6 +26,47 @@ class ForumIndexViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
+    @Test fun discoveryIntroducesFeedsOnceAndPreservesHiddenChoices() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val feed = DiscoveredFeed("fresh", "Fresh", "Recent topics", "/api/v2/topics?feed=fresh", false)
+        api.catalog = FeedCatalog(feeds = listOf(feed, feed, feed.copy(id = "trending")))
+        val prefs = MemoryPreferences()
+        val vm = viewModel(api, prefs)
+        vm.launch(); advanceUntilIdle()
+        assertEquals(listOf("main-feed", "feed:fresh"), vm.uiState.value.visibleDestinations.map { it.id })
+        vm.select(Destination.Discovered(feed)); advanceUntilIdle()
+        assertTrue("discovered:fresh:1:null" in api.calls)
+        vm.updateVisibleOrder(listOf("main-feed"))
+        vm.refreshTaxonomy(); advanceUntilIdle()
+        assertEquals(listOf("main-feed"), vm.uiState.value.visibleDestinations.map { it.id })
+        api.catalog = FeedCatalog(feeds = listOf(feed, feed.copy(id = "new")))
+        vm.refreshTaxonomy(); advanceUntilIdle()
+        assertEquals(listOf("main-feed", "feed:new"), vm.uiState.value.visibleDestinations.map { it.id })
+    }
+
+    @Test fun optingOutClearsAndReloadsSelectedDiscoveredPersonalizedFeed() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val feed = DiscoveredFeed("personal", "Personal", "", "/api/v2/topics?feed=personal", true)
+        api.catalog = FeedCatalog(feeds = listOf(feed))
+        val vm = viewModel(api, tokens = MemoryTokenStore(enrollment()))
+        vm.launch(); advanceUntilIdle()
+        vm.select(Destination.Discovered(feed)); advanceUntilIdle()
+        assertTrue("discovered:personal:1:token" in api.calls)
+        vm.optOut(); advanceUntilIdle()
+        assertTrue("discovered:personal:1:null" in api.calls)
+        assertTrue(vm.uiState.value.feeds["feed:personal"] is FeedState.Loaded)
+    }
+
+    @Test fun notInterestingReportsUseContributionContract() = runTest(dispatcher.scheduler) {
+        val api = FakeApi()
+        val vm = viewModel(api, tokens = MemoryTokenStore(enrollment()))
+        advanceUntilIdle()
+        assertTrue(vm.report(42, "not_interesting", true))
+        advanceUntilIdle()
+        assertTrue("action:42:not_interesting:true" in api.calls)
+        assertEquals(ReportState.Succeeded, vm.uiState.value.contribution.reports[42])
+    }
+
     @Test fun coldLaunchFiltersAndUsesDefaultTypedDestinationOrder() = runTest(dispatcher.scheduler) {
         val subjects = listOf("sport", "main", "science", "web-dev", "community", "audio", "gaming", "jobs",
             "opensource", "markets", "creative", "technology", "ai", "lifestyle").map { subject(it) }
@@ -577,7 +618,7 @@ class ForumIndexViewModelTest {
     }
 
     @Test fun bookmarksRemainUnreadUntilReadAndNeverInventTopicIds() = runTest(dispatcher.scheduler) {
-        val saved = topic(4).copy(forum = topic(4).forum.copy(supportsMarkdown = true)).bookmark()
+        val saved = topic(4).copy(forum = topic(4).forum.copy(supportsMarkdown = true), readerMarkdownUrl = topic(4).url).bookmark()
             .copy(lastReadAt = 1, latestReplyAt = 2)
         val api = FakeApi()
         val vm = viewModel(api, MemoryPreferences(stars = listOf(saved)), MemoryTokenStore(enrollment()))
@@ -734,7 +775,10 @@ class ForumIndexViewModelTest {
         prefs: MemoryPreferences = MemoryPreferences(),
         tokens: MemoryTokenStore = MemoryTokenStore(),
         runner: BlockingCallRunner = DispatcherCallRunner(dispatcher),
-    ) = ForumIndexViewModel(api, prefs, tokens, runner).also { viewModelApis[it] = api }
+    ) = ForumIndexViewModel(api, prefs, tokens, object : BlockingCallRunner {
+        override suspend fun <T> run(call: () -> T): T =
+            if ((call as? kotlin.reflect.KCallable<*>)?.name == "fetchFeeds") call() else runner.run(call)
+    }).also { viewModelApis[it] = api }
 
     private val viewModelApis = java.util.WeakHashMap<ForumIndexViewModel, FakeApi>()
     private fun vmApi(vm: ForumIndexViewModel) = viewModelApis[vm]
@@ -746,6 +790,7 @@ class ForumIndexViewModelTest {
         override var openedTopicIds: Set<String> = emptySet(),
         override var deviceNameOverride: String? = null,
     ) : PreferencesStore {
+        override var introducedFeedIds = emptySet<String>()
         override var contributionsOptedOut = false
         override var contributorDisplayName: String? = null
         override fun markOpened(forumId: Int, topicId: Int) { openedTopicIds += "$forumId:$topicId" }
@@ -805,6 +850,12 @@ class ForumIndexViewModelTest {
         val expireAction: Boolean = false,
         val expirePersonalized: Boolean = false,
     ) : ForumIndexApi {
+        var catalog = FeedCatalog()
+        override fun fetchFeeds() = catalog
+        override fun fetchDiscoveredTopics(feed: DiscoveredFeed, page: Int, token: String?): FeedEnvelope {
+            calls += "discovered:${feed.id}:$page:$token"
+            return feed(topic(71))
+        }
         val calls = mutableListOf<String>()
         override fun fetchTaxonomy() = NavigationEnvelope("v2", "5d", subjects)
         var feedbackFailure = false

@@ -8,6 +8,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -91,6 +100,20 @@ internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boo
 /** Native, selectable Android text: no HTML WebView is used for the preview. */
 @Composable
 internal fun MarkdownPostBody(markdown: String, renderer: Markwon, onRendered: () -> Unit = {}) {
+    val segments = remember(markdown) { MarkdownOnebox.segments(markdown) }
+    Column {
+        segments.forEachIndexed { index, segment ->
+            key(index, segment.markdown) { MarkdownSegmentBody(segment, renderer, onRendered) }
+        }
+    }
+}
+
+@Composable
+private fun MarkdownSegmentBody(segment: MarkdownSegment, renderer: Markwon, onRendered: () -> Unit) {
+    val markdown = segment.markdown
+    var expanded by rememberSaveable(markdown) { mutableStateOf(false) }
+    var overflowing by remember(markdown) { mutableStateOf(false) }
+    val previewHeight = with(LocalDensity.current) { 200.dp.roundToPx() }
     val colors = MaterialTheme.colorScheme
     val renderedCallback by rememberUpdatedState(onRendered)
     val rendered by produceState<Spanned?>(null, markdown, renderer) {
@@ -106,20 +129,30 @@ internal fun MarkdownPostBody(markdown: String, renderer: Markwon, onRendered: (
             setTextIsSelectable(true)
             movementMethod = TableAwareMovementMethod.create()
             setLineSpacing(0f, 1.15f)
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                overflowing = (layout?.height ?: 0) > previewHeight
+            }
         } },
         update = { view ->
+            view.maxHeight = if (segment.isOnebox && !expanded) previewHeight else Int.MAX_VALUE
             view.setTextColor(colors.onSurface.toArgb())
             view.setLinkTextColor(colors.primary.toArgb())
             rendered?.let {
                 if (view.tag !== it) {
                     renderer.setParsedMarkdown(view, it)
                     view.tag = it
-                    view.doOnLayout { renderedCallback() }
+                    view.doOnLayout {
+                        overflowing = (view.layout?.height ?: 0) > previewHeight
+                        renderedCallback()
+                    }
                 }
             }
         },
         onRelease = { AsyncDrawableScheduler.unschedule(it) },
     )
+    if (segment.isOnebox && overflowing) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
+        Text(if (expanded) "Collapse preview" else "Expand preview")
+    }
 }
 
 /** The preview loads only bounded HTTPS images, without app credentials or local-file access. */

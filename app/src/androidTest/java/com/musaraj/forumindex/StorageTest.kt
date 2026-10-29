@@ -38,6 +38,23 @@ class StorageTest {
         assertNull(ForumIndexPreferences(context).stars.single().lastReadPostNumber)
     }
 
+    @Test fun readerSourceAndDiscoveredFeedChoicesSurviveRestart() {
+        val forum = ForumSummary(1, "Forum", "forum", java.net.URL("https://forum.test"), null, true)
+        val legacy = StarredTopic("Topic", "https://forum.test/t/1", "Forum", forum = forum)
+        val converted = legacy.copy(url = "https://forum.test/t/2", readerMarkdownUrl = java.net.URL("https://index.test/markdown/2"))
+        val disabled = legacy.copy(url = "https://forum.test/t/3", readerMarkdownUrl = null)
+        preferences.stars = listOf(legacy, converted, disabled)
+        preferences.introducedFeedIds = setOf("feed:fresh")
+        assertEquals(listOf(legacy, converted, disabled), ForumIndexPreferences(context).stars)
+        assertEquals(setOf("feed:fresh"), ForumIndexPreferences(context).introducedFeedIds)
+        val raw = context.getSharedPreferences("forum_index", Context.MODE_PRIVATE)
+        val entries = org.json.JSONArray(raw.getString("stars", null))
+        entries.getJSONObject(0).remove("reader_markdown_url")
+        raw.edit().putString("stars", entries.toString()).commit()
+        assertEquals(legacy.readerMarkdownUrl, ForumIndexPreferences(context).stars.first().readerMarkdownUrl)
+        assertNull(ForumIndexPreferences(context).stars.last().readerMarkdownUrl)
+    }
+
     @Test fun appearanceAndContributionChoicesSurviveNewStore() {
         assertEquals(AppAppearance.AUTO, preferences.appearance)
         preferences.appearance = AppAppearance.DARK

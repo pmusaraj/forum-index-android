@@ -28,11 +28,16 @@ data class StarredTopic(
     val replyCount: Int = 0,
     val externalSignals: List<ExternalSignal> = emptyList(),
     val lastReadPostNumber: Int? = null,
+    val readerMarkdownUrl: java.net.URL? = if (forum?.supportsMarkdown == true) runCatching { java.net.URL(url) }.getOrNull() else null,
 ) {
     val hasUnreadReplies get() = latestReplyAt?.let { it > lastReadAt } == true
 }
 
 interface PreferencesStore {
+    var introducedFeedIds: Set<String>
+        get() = emptySet()
+        set(value) {}
+
     var forYouIntroduced: Boolean
         get() = false
         set(value) {}
@@ -65,6 +70,10 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
         get() = preferences.getBoolean("for_you_introduced", false)
         set(value) { preferences.edit().putBoolean("for_you_introduced", value).apply() }
 
+    override var introducedFeedIds: Set<String>
+        get() = preferences.getStringSet("introduced_feeds", emptySet()).orEmpty().toSet()
+        set(value) { preferences.edit().putStringSet("introduced_feeds", value).apply() }
+
     override var visibleSubjectOrder: List<String>
         get() = readArray(SUBJECTS) { getString(it) }
         set(value) = writeArray(SUBJECTS, JSONArray(value))
@@ -92,6 +101,8 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
                         if (source != null && url != null) ExternalSignal(source, url) else null
                     } }.orEmpty(),
                     if (it.isNull("last_read_post_number")) null else it.getInt("last_read_post_number"),
+                    if (it.has("reader_markdown_url")) javaUrl(it.optString("reader_markdown_url"))
+                    else if (it.optJSONObject("forum")?.optBoolean("supports_markdown") == true) javaUrl(it.getString("url")) else null,
                 )
             }
         }
@@ -105,6 +116,7 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
                 .put("external_signals", JSONArray().also { signals -> star.externalSignals.forEach {
                     signals.put(JSONObject().put("source", it.source.apiValue).put("url", it.url.toString()))
                 } })
+                .put("reader_markdown_url", star.readerMarkdownUrl?.toString() ?: JSONObject.NULL)
                 .put("last_read_post_number", star.lastReadPostNumber)
                 .put("added_at", star.addedAt).put("last_read_at", star.lastReadAt).put("latest_reply_at", star.latestReplyAt)
                 .put("forum", star.forum?.let { f -> JSONObject().put("id", f.id).put("name", f.name).put("slug", f.slug)

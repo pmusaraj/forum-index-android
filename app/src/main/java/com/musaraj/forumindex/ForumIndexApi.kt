@@ -29,7 +29,11 @@ data class Topic(
     val publishedAt: Instant?,
     val replyCount: Int,
     val externalSignals: List<ExternalSignal> = emptyList(),
-)
+    val readerMarkdownUrl: URL? = if (forum.supportsMarkdown) url else null,
+) {
+    val usesMarkdownReader get() = readerMarkdownUrl != null
+    val usesConvertedMarkdown get() = usesMarkdownReader && readerMarkdownUrl.toString() != url.toString()
+}
 data class ExternalSignal(val source: ExternalSignalSource, val url: URL)
 enum class ExternalSignalSource(val apiValue: String, val displayName: String) {
     HACKER_NEWS("hacker_news", "Hacker News"),
@@ -46,6 +50,9 @@ data class ForumSummary(
 )
 data class ForumDetail(val forum: ForumSummary, val description: String?, val siteUrl: URL?, val organizationUrl: URL?)
 
+data class DiscoveredFeed(val id: String, val name: String, val description: String, val path: String, val personalized: Boolean)
+data class FeedCatalog(val version: String = "v2", val feeds: List<DiscoveredFeed> = emptyList())
+
 data class FeedEnvelope(val count: Int, val results: List<Topic>)
 data class Installation(
     val publicId: String,
@@ -61,6 +68,7 @@ data class Enrollment(val token: String, val installation: Installation)
 sealed interface Destination {
     val id: String
 
+    data class Discovered(val feed: DiscoveredFeed) : Destination { override val id = "feed:${feed.id}" }
     data object ForYou : Destination { override val id = "for-you-feed" }
     data object Main : Destination { override val id = "main-feed" }
     data class Subject(val subject: com.musaraj.forumindex.Subject) : Destination {
@@ -69,6 +77,8 @@ sealed interface Destination {
 }
 
 interface ForumIndexApi {
+    fun fetchFeeds(): FeedCatalog = FeedCatalog()
+    fun fetchDiscoveredTopics(feed: DiscoveredFeed, page: Int, token: String?): FeedEnvelope { throw UnsupportedOperationException() }
     fun fetchTaxonomy(): NavigationEnvelope
     fun fetchMainTopics(page: Int): FeedEnvelope
     fun fetchPersonalizedTopics(page: Int, token: String?): FeedEnvelope = fetchMainTopics(page)
@@ -109,6 +119,23 @@ class HttpForumIndexApi(
     internal fun subjectTopicsUrl(slug: String, page: Int): URL {
         require(page > 0) { "page must be positive" }
         return url("/api/v2/subjects/${encodeSlug(slug)}/topics", "feed=trending&limit=30&page=$page&language=en")
+    }
+
+    internal fun discoveredTopicsUrl(feed: DiscoveredFeed, page: Int): URL {
+        require(page > 0)
+        val path = URI(feed.path)
+        require(path.scheme == null && path.rawAuthority == null && path.fragment == null &&
+            path.path.startsWith("/api/v2/") && !path.path.contains("..") && !path.path.contains('\\'))
+        val query = path.rawQuery.orEmpty().split('&').filter { it.isNotEmpty() &&
+            java.net.URLDecoder.decode(it.substringBefore('='), "UTF-8") !in setOf("page", "limit", "language") }
+        return url(path.rawPath, (query + listOf("page=$page", "limit=30", "language=en")).joinToString("&"))
+    }
+
+    override fun fetchFeeds(): FeedCatalog = decode { ForumIndexJson.feeds(request(url("/api/v2/feeds"), "GET")) }
+
+    override fun fetchDiscoveredTopics(feed: DiscoveredFeed, page: Int, token: String?): FeedEnvelope = decode {
+        ForumIndexJson.feed(request(discoveredTopicsUrl(feed, page), "GET",
+            token = if (feed.personalized) token?.let(::checkedToken) else null))
     }
 
     fun fetchForum(id: Int): ForumDetail {
@@ -225,6 +252,7 @@ class HttpForumIndexApi(
             throw ForumIndexApiException.Transport()
         }
         try {
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
             connection.requestMethod = method
@@ -301,6 +329,16 @@ class HttpForumIndexApi(
 }
 
 internal object ForumIndexJson {
+    fun feeds(json: String): FeedCatalog {
+        val root = JSONObject(json)
+        val feeds = root.getJSONArray("feeds")
+        return FeedCatalog(root.getString("version"), List(feeds.length()) { index ->
+            val value = feeds.getJSONObject(index)
+            DiscoveredFeed(value.getString("id"), value.getString("name"), value.optString("description"),
+                value.getString("path"), value.optBoolean("personalized"))
+        })
+    }
+
     fun navigation(json: String): NavigationEnvelope {
         val root = JSONObject(json)
         val values = root.getJSONArray("subjects")
@@ -344,6 +382,8 @@ internal object ForumIndexJson {
             getJSONObject("forum").forum(), parseInstant(optStringOrNull("published_at")),
             maxOf(0, engagement?.optInt("replies", 0) ?: 0),
             externalSignals(),
+            if (has("reader_markdown_url")) acceptedUrl(optStringOrNull("reader_markdown_url"))
+            else if (getJSONObject("forum").optBoolean("supports_markdown")) acceptedUrl(optStringOrNull("url")) else null,
         )
     }
 

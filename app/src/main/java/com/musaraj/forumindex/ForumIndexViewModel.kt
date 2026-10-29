@@ -111,7 +111,7 @@ class ForumIndexViewModel(
     fun openBookmark(bookmark: StarredTopic) {
         val url = try { validTopicUrl(java.net.URL(bookmark.url)) } catch (_: Exception) { null } ?: return
         val forum = bookmark.forum ?: ForumSummary(bookmark.forumId ?: 0, bookmark.forumName, "", url, null, false)
-        val topic = Topic(bookmark.topicId ?: 0, bookmark.title, url, null, forum, bookmark.publishedAt, bookmark.replyCount, bookmark.externalSignals)
+        val topic = Topic(bookmark.topicId ?: 0, bookmark.title, url, null, forum, bookmark.publishedAt, bookmark.replyCount, bookmark.externalSignals, bookmark.readerMarkdownUrl)
         mutableFeedReturnTarget.value = null
         mutableDetailSession.value = TopicDetailSession.create(listOf(topic), topic, "bookmarks")
         markOpened(bookmark)
@@ -183,9 +183,34 @@ class ForumIndexViewModel(
         automaticEnrollmentDevice = defaultDeviceName
         enrollAutomaticallyIfNeeded()
         loadTaxonomy()
+        refreshFeedCatalog()
     }
 
-    fun refreshTaxonomy() = loadTaxonomy()
+    fun refreshTaxonomy() { loadTaxonomy(); refreshFeedCatalog() }
+
+    private var discoveredFeeds = emptyList<Destination.Discovered>()
+    private var catalogGeneration = 0
+    private fun refreshFeedCatalog() {
+        val generation = ++catalogGeneration
+        viewModelScope.launch {
+            try {
+                val catalog = calls.run(api::fetchFeeds)
+                if (generation != catalogGeneration || catalog.version != "v2") return@launch
+                val previous = discoveredFeeds
+                discoveredFeeds = catalog.feeds.filter { it.id.isNotBlank() && it.id !in setOf("trending", "for_you", "main") }
+                    .distinctBy { it.id }.map(Destination::Discovered)
+                val changedIds = previous.filter { it !in discoveredFeeds }.map { it.id }
+                if (mutableUiState.value.selectedDestination?.id in changedIds) cancelFeed()
+                if (changedIds.isNotEmpty()) {
+                    prefetchJob?.cancel()
+                    prefetchGeneration++
+                    changedIds.forEach { setFeed(it, FeedState.Initial) }
+                }
+                (mutableUiState.value.taxonomy as? TaxonomyState.Loaded)?.let { applyTaxonomy(it.subjects) }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Optional discovery must not block existing feeds. */ }
+        }
+    }
 
     private fun loadTaxonomy() {
         val generation = ++taxonomyGeneration
@@ -206,13 +231,20 @@ class ForumIndexViewModel(
     }
 
     private fun applyTaxonomy(subjects: List<Subject>) {
-        val destinations = (if (mutableUiState.value.contribution.enrollment?.installation?.forYouEligible == true) listOf(Destination.ForYou, Destination.Main) else listOf(Destination.Main)) + subjects.map(Destination::Subject)
+        val destinations = (if (mutableUiState.value.contribution.enrollment?.installation?.forYouEligible == true) listOf(Destination.ForYou, Destination.Main) else listOf(Destination.Main)) + subjects.map(Destination::Subject) + discoveredFeeds
         val byId = destinations.associateBy(Destination::id)
         val stored = preferences.visibleSubjectOrder.distinct().mapNotNull(byId::get)
         val introduceForYou = Destination.ForYou in destinations && !preferences.forYouIntroduced
-        val visible = ((if (Destination.ForYou in destinations && (preferences.visibleSubjectOrder.isEmpty() || introduceForYou)) listOf(Destination.ForYou) else emptyList()) + (if (preferences.visibleSubjectOrder.isEmpty()) {
+        var visible = ((if (Destination.ForYou in destinations && (preferences.visibleSubjectOrder.isEmpty() || introduceForYou)) listOf(Destination.ForYou) else emptyList()) + (if (preferences.visibleSubjectOrder.isEmpty()) {
             DEFAULT_SLUGS.mapNotNull { slug -> if (slug == "main") Destination.Main else byId["parent:$slug"] }
         } else if (introduceForYou) stored.filterNot { it == Destination.ForYou } else stored)).ifEmpty { listOf(Destination.Main) }
+        val newFeeds = discoveredFeeds.filter { it.id !in preferences.introducedFeedIds }
+        visible = (visible + newFeeds).distinctBy { it.id }
+        if (newFeeds.isNotEmpty()) {
+            preferences.introducedFeedIds = preferences.introducedFeedIds + newFeeds.map { it.id }
+            preferences.visibleSubjectOrder = visible.map { it.id } +
+                preferences.visibleSubjectOrder.filter { it.startsWith("feed:") && it !in byId }
+        }
         if (introduceForYou) {
             preferences.forYouIntroduced = true
             if (preferences.visibleSubjectOrder.isNotEmpty()) preferences.visibleSubjectOrder = visible.map { it.id }
@@ -243,6 +275,7 @@ class ForumIndexViewModel(
         val byId = mutableUiState.value.allDestinations.associateBy(Destination::id)
         val visible = ids.distinct().mapNotNull(byId::get).ifEmpty { listOf(byId[Destination.Main.id] ?: return) }
         val saved = visible.map(Destination::id).toMutableList()
+        preferences.visibleSubjectOrder.filter { it.startsWith("feed:") && it !in byId }.forEach { saved.add(it) }
         val oldForYouIndex = preferences.visibleSubjectOrder.indexOf(Destination.ForYou.id)
         if (Destination.ForYou.id !in byId && oldForYouIndex >= 0) saved.add(oldForYouIndex.coerceAtMost(saved.size), Destination.ForYou.id)
         preferences.visibleSubjectOrder = saved
@@ -628,7 +661,7 @@ class ForumIndexViewModel(
     }
 
     fun markOpened(topic: Topic) {
-        saveStars(mutableStars.value.map { if (it.url == topic.url?.toString() && !topic.forum.supportsMarkdown) it.copy(lastReadAt = System.currentTimeMillis()) else it })
+        saveStars(mutableStars.value.map { if (it.url == topic.url?.toString() && !topic.usesMarkdownReader) it.copy(lastReadAt = System.currentTimeMillis()) else it })
         markOpened(topic.forum.id, topic.id)
     }
 
@@ -673,7 +706,7 @@ class ForumIndexViewModel(
     }
 
     fun markOpened(star: StarredTopic) {
-        saveStars(mutableStars.value.map { if (it.sameIdentity(star) && star.forum?.supportsMarkdown != true) it.copy(lastReadAt = System.currentTimeMillis()) else it })
+        saveStars(mutableStars.value.map { if (it.sameIdentity(star) && star.readerMarkdownUrl == null) it.copy(lastReadAt = System.currentTimeMillis()) else it })
         if (star.forumId != null && star.topicId != null) preferences.markOpened(star.forumId, star.topicId)
         mutableUiState.value = mutableUiState.value.copy(openedTopicIds = preferences.openedTopicIds)
         if (mutableUiState.value.contribution.enrollment != null) star.topicId?.let { report(it, "read", true) }
@@ -753,6 +786,16 @@ class ForumIndexViewModel(
     }
 
     private fun syncEligibility(old: Enrollment?, enrollment: Enrollment?) {
+        val reloadDiscovered = old?.token != enrollment?.token && discoveredFeeds.any {
+            it.feed.personalized && it.id == mutableUiState.value.selectedDestination?.id
+        }
+        if (old?.token != enrollment?.token) {
+            val privateFeeds = discoveredFeeds.filter { it.feed.personalized }
+            if (privateFeeds.any { it.id == mutableUiState.value.selectedDestination?.id }) cancelFeed()
+            prefetchJob?.cancel()
+            prefetchGeneration++
+            privateFeeds.forEach { setFeed(it.id, FeedState.Initial) }
+        }
         if ((old?.installation?.forYouEligible == true) != (enrollment?.installation?.forYouEligible == true) ||
             (old?.token != enrollment?.token && old?.installation?.forYouEligible == true)) {
             if (mutableUiState.value.selectedDestination == Destination.ForYou) cancelFeed()
@@ -761,6 +804,7 @@ class ForumIndexViewModel(
             setFeed(Destination.ForYou.id, FeedState.Initial)
             (mutableUiState.value.taxonomy as? TaxonomyState.Loaded)?.let { applyTaxonomy(it.subjects) }
         }
+        if (reloadDiscovered) loadSelectedFeedIfReady()
     }
 
     private fun contributionFailure(message: String = REQUEST_FAILED) {
@@ -810,6 +854,15 @@ class ForumIndexViewModel(
                 throw CancellationException()
             }
         }
+        is Destination.Discovered -> {
+            val token = if (destination.feed.personalized) currentToken() else null
+            val generation = contributionGeneration
+            try { calls.run { api.fetchDiscoveredTopics(destination.feed, page, token) } }
+            catch (e: ForumIndexApiException.ExpiredAccess) {
+                if (token != null) viewModelScope.launch { expireEnrollment(generation, token) }
+                throw e
+            }
+        }
         is Destination.Subject -> calls.run { api.fetchSubjectTopics(destination.subject.slug, page) }
     }
 
@@ -847,6 +900,6 @@ class ForumIndexViewModel(
             "main", "ai", "technology", "creative", "markets", "opensource", "jobs", "gaming",
             "audio", "community", "web-dev", "sport", "lifestyle", "science",
         )
-        val ACTIONS = setOf("starred", "read", "low_quality", "inappropriate", "wrong_subject")
+        val ACTIONS = setOf("starred", "read", "low_quality", "inappropriate", "wrong_subject", "not_interesting")
     }
 }

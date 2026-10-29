@@ -43,6 +43,7 @@ class TopicDetailUiTest {
     @get:Rule val compose = createComposeRule()
     private var backDispatcher: OnBackPressedDispatcher? = null
     private var nativeRoot: View? = null
+    @Volatile private var webReady = false
 
     @Test fun internalLinksKeepPreviewActionsAndBackRestoresScrollWithoutRefetching() {
         val linkedUrl = "https://forum.example/t/linked/22/7?mode=one#post"
@@ -169,7 +170,7 @@ class TopicDetailUiTest {
 
     @Test fun nonMarkdownForumNeverFetchesPreview() {
         var fetched = false
-        show(topics = listOf(topic(1).copy(forum = topic(1).forum.copy(supportsMarkdown = false))),
+        show(topics = listOf(topic(1).copy(forum = topic(1).forum.copy(supportsMarkdown = false), readerMarkdownUrl = null)),
             source = { fetched = true; error("must not fetch") })
         compose.onNodeWithTag("fixture-web").assertIsDisplayed()
         compose.onNodeWithTag("topic-view-toggle").assertDoesNotExist()
@@ -222,10 +223,10 @@ class TopicDetailUiTest {
         show(topics = listOf(topic(1), topic(2)),
             source = { MarkdownPage(document("Scrollable paragraph.\n\n".repeat(100)), it) },
             realWeb = true, select = { selected = it })
-        compose.waitUntil(5_000) {
-            compose.onNodeWithTag("topic-view-toggle").fetchSemanticsNode()
-                .config[SemanticsProperties.StateDescription] == "Ready"
-        }
+        compose.onNodeWithTag("topic-webview").assertDoesNotExist()
+        compose.onNodeWithTag("topic-view-toggle").performClick()
+        compose.waitUntil(5_000) { webReady }
+        compose.onNodeWithTag("topic-view-toggle").performClick()
         val preview = compose.onNodeWithTag("topic-markdown-preview")
         preview.performTouchInput {
             swipe(Offset(width * .7f, height * .8f), Offset(width * .5f, height * .2f), 600)
@@ -241,11 +242,8 @@ class TopicDetailUiTest {
         var selected = 0
         show(topics = listOf(topic(1), topic(2)),
             source = { MarkdownPage(document("Body"), it) }, realWeb = true, select = { selected = it })
-        compose.waitUntil(5_000) {
-            compose.onNodeWithTag("topic-view-toggle").fetchSemanticsNode()
-                .config[SemanticsProperties.StateDescription] == "Ready"
-        }
         compose.onNodeWithTag("topic-view-toggle").performClick()
+        compose.waitUntil(5_000) { webReady }
         compose.onNodeWithTag("topic-webview").performTouchInput {
             down(Offset(width * .85f, height * .8f))
             // Begin vertically, then drift sideways without lifting the finger.
@@ -287,7 +285,7 @@ class TopicDetailUiTest {
                 webContent = { url, visible, ready ->
                     if (realWeb) TopicWebPage(url, visible = visible,
                         testHtml = "<html><meta name='viewport' content='width=device-width, initial-scale=1'><body>" +
-                            "<p>Scrollable web paragraph</p>".repeat(200) + "</body></html>", onReady = ready)
+                            "<p>Scrollable web paragraph</p>".repeat(200) + "</body></html>", onReady = { webReady = it; ready(it) })
                     else {
                         LaunchedEffect(Unit) { ready(true) }
                         if (visible) Box(Modifier.fillMaxSize().background(Color.White).testTag("fixture-web")) {

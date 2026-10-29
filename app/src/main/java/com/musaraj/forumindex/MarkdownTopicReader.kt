@@ -66,9 +66,14 @@ internal class MarkdownTopicReader(private val url: URL, private val source: Top
         mutableState.value = state.value.copy(loading = true, error = null)
         try {
             val target = bookmark?.takeIf { it.hasUnreadReplies }?.let { resumeClient.target(it) }
-            val page = source.fetch(target?.pageUrl ?: url)
+            val page = if (target == null) source.initialDocument(url) else {
+                val fetched = source.fetch(target.pageUrl)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    ParsedTopicPage(MarkdownTopicDocument.parse(fetched.markdown, fetched.url), fetched.url)
+                }
+            }
             currentCoroutineContext().ensureActive()
-            val document = MarkdownTopicDocument.parse(page.markdown, page.url)
+            val document = page.document
             if (target?.postNumber != null && document.posts.none { it.postNumber == target.postNumber })
                 throw java.io.IOException("Unread reply no longer available")
             loadedPages.add(document.pageNumber)
@@ -97,7 +102,7 @@ internal class MarkdownTopicReader(private val url: URL, private val source: Top
         try {
             val page = source.fetch(next)
             currentCoroutineContext().ensureActive()
-            val document = MarkdownTopicDocument.parse(page.markdown, page.url, current.posts.size)
+            val document = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { MarkdownTopicDocument.parse(page.markdown, page.url) }
             loadedPages.add(document.pageNumber)
             mutableState.value = state.value.copy(
                 posts = current.posts + uniquePosts(document.posts, current.posts),
@@ -121,7 +126,7 @@ internal class MarkdownTopicReader(private val url: URL, private val source: Top
         try {
             val page = source.fetch(previous)
             currentCoroutineContext().ensureActive()
-            val document = MarkdownTopicDocument.parse(page.markdown, page.url)
+            val document = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { MarkdownTopicDocument.parse(page.markdown, page.url) }
             loadedPages.add(document.pageNumber)
             mutableState.value = state.value.copy(
                 posts = uniquePosts(document.posts, current.posts) + current.posts,

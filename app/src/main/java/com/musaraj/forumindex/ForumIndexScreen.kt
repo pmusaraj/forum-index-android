@@ -688,6 +688,7 @@ private fun TopicActions(
                 Button(onClick = onAbout, modifier = Modifier.testTag("topic-context-about")) { Text("About") }
                 if (canStar) Button(onClick = onToggleStar) { Text(if (starred) "Remove bookmark" else "Bookmark") }
                 Text("Report", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
+                Button(onClick = { onReport("not_interesting") }) { Text("Not Interesting for Me") }
                 Button(onClick = { onReport("low_quality") }) { Text("Low quality") }
                 Button(onClick = { onReport("inappropriate") }) { Text("Inappropriate") }
                 Button(onClick = { onReport("wrong_subject") }) { Text("Wrong subject") }
@@ -869,6 +870,7 @@ private fun StatusBanner(message: String) {
 }
 
 private fun Destination.label() = when (this) {
+    is Destination.Discovered -> feed.name
     Destination.ForYou -> "For You"
     Destination.Main -> "Trending"
     is Destination.Subject -> when {
@@ -880,6 +882,7 @@ private fun Destination.label() = when (this) {
 }
 
 private fun Destination.tabTag() = when (this) {
+    is Destination.Discovered -> id
     Destination.ForYou -> "for-you-feed"
     Destination.Main -> "main-feed"
     is Destination.Subject -> subject.slug

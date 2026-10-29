@@ -1,0 +1,4 @@
+Discover new feeds and customize your tabs.
+Report topics that aren’t interesting to you.
+Expand GitHub previews and read more forums in the native reader.
+Improved bookmark resume, reader loading, and navigation performance.

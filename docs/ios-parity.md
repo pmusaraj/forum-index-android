@@ -158,3 +158,21 @@ An existing WebView swipe check failed intermittently during an intermediate
 rerun and passed in the final run. Store screenshot capture was skipped in the
 initial full run because it requires its explicit capture flag. Live-forum and
 physical-device/TalkBack checks remain manual follow-up.
+
+## October 29 comparison (iOS build 43)
+
+Reviewed iOS through [`2986179`](https://github.com/pmusaraj/forum-index-app/commit/29861798deb3875eed3fcd789d32fa7636c2cb1c), following the previous `2eb83af` baseline.
+
+- Feed discovery uses `/api/v2/feeds`. New server-defined feeds appear once, can be reordered or hidden with the existing subject picker, and preserve saved choices. Discovery failure leaves existing feeds available. Reserved/duplicate IDs are ignored. Discovered requests stay under `/api/v2/`, preserve feed filters, set paging/language parameters, and send contribution credentials only for personalized feeds. API redirects are disabled.
+- Reports include “Not Interesting for Me” using `not_interesting`.
+- Exported oneboxes render as Markdown, with GitHub punctuation unescaped once and a 200 dp preview with Expand/Collapse controls. Ordinary quotes and fenced examples remain unchanged. Android uses text buttons and a clipped native text view instead of the SwiftUI gradient mask.
+- `reader_markdown_url` controls reader availability, including explicit null/invalid opt-outs. Missing legacy fields fall back to forum Markdown support. Bookmarks persist the resolved URL while sharing/opening the original forum URL. Converted unread bookmarks open the original post in the full-page view; Show preview starts the converted reader at the beginning.
+- Initial documents are cached for two minutes, bounded to 12 entries and 4 MiB of source text. Parsing runs off the main thread. Mutable readers and bookmark resume documents are not shared. Android keeps page-scoped cancellation; unlike the Apple cache, concurrent misses may fetch independently.
+- Full web pages load only after selection and a request to view them (including automatic fallback), then remain available for preview/full-page toggling. Adjacent topics do not build native article views until selected; unread resume is limited to selected topics. Existing feed list-state and linked-preview history restoration remain in use.
+- Markdown requests respect host-scoped Retry-After delays, including HTTP dates. Existing linked-image rendering already supports the iOS build 42 behavior and remains covered by the image-click test.
+
+Apple signing, TestFlight version changes, UIKit scroll probes, and macOS changes are platform-specific and are not ported.
+
+Validation: 115 JVM tests passed on the final revision. The full Pixel 9 / Android 15 suite passed 59 tests with the opt-in store screenshot exporter skipped. After the final personalized-feed opt-out and asynchronous image-layout refinements, all five affected recent-feature UI tests passed again. Release APK assembly and release lint passed (0 errors, 34 warnings, 2 hints). Coverage includes feed discovery and hidden choices, public versus personalized credentials, report submission, reader-source decoding and persistence, converted unread resume, onebox parsing and expansion, linked-image clicks, cache expiration/eviction, retry delays, and existing scrolling/history regressions. Production reports were not submitted; live discovery/converter, physical-device, and TalkBack checks remain unverified.
+
+Physical-device follow-up: the user smoke-tested the separate Forum Index Test build on a Samsung SM-A145M and confirmed it looked good before authorizing release. The existing Google Play app and its data were preserved. This does not replace the outstanding TalkBack and targeted live-service checks.

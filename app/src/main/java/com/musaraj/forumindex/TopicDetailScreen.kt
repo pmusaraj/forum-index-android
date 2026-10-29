@@ -129,14 +129,21 @@ private fun TopicDetailPage(
     val url = validTopicUrl(topic.url) ?: return
     val initialBookmark = remember(url) { savedBookmark(url.toString()) }
     var restart by remember(url) { mutableStateOf(0) }
-    val history = remember(url, source, restart) { MarkdownPreviewHistory(url, source) }
+    val history = remember(url, source, restart) { MarkdownPreviewHistory(url, source, topic.readerMarkdownUrl ?: url) }
     val pages by key(history) { history.pages.collectAsState() }
     val page = pages.last()
     val reader = page.reader
     val state by key(reader) { reader.state.collectAsState() }
     var showsOverview by rememberSaveable { mutableStateOf(false) }
-    var usesWeb by rememberSaveable(url.toString()) { mutableStateOf(!topic.forum.supportsMarkdown) }
-    var fullPageReady by remember(page.id) { mutableStateOf(false) }
+    var usesWeb by rememberSaveable(url.toString()) { mutableStateOf(!topic.usesMarkdownReader) }
+    var hasOpenedWeb by remember(reader) { mutableStateOf(false) }
+    var hasBeenSelected by remember(url) { mutableStateOf(false) }
+    LaunchedEffect(active, usesWeb, reader) {
+        if (active) {
+            hasBeenSelected = true
+            if (usesWeb) hasOpenedWeb = true
+        }
+    }
     val scope = key(reader) { rememberCoroutineScope() }
     val articleState = rememberSaveableStateHolder()
     val lifecycleState by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
@@ -150,20 +157,34 @@ private fun TopicDetailPage(
     }
     BackHandler(enabled = active && history.canGoBack, onBack = goBack)
 
+    var convertedResumeError by remember(reader) { mutableStateOf<String?>(null) }
+    var fullPageUrl by remember(reader) { mutableStateOf(page.url) }
     val resumeBookmark = initialBookmark.takeIf { page.id == 0 && restart == 0 }
     suspend fun loadReader() {
+        convertedResumeError = null
+        if (topic.usesConvertedMarkdown && resumeBookmark?.hasUnreadReplies == true) {
+            try {
+                val target = resumeClient.target(resumeBookmark)
+                fullPageUrl = target.postNumber?.let { number ->
+                    BookmarkActivity.endpoint(url.toString())?.let { URL(it.toString().removeSuffix(".json") + "/$number") }
+                } ?: url
+                usesWeb = true
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { convertedResumeError = "Couldn’t load the preview" }
+            return
+        }
         reader.load(resumeBookmark, resumeClient)
         if (page.id == 0) onResume(url.toString(), reader.state.value.latestReplyAt)
     }
-    LaunchedEffect(reader) {
-        if (topic.forum.supportsMarkdown) {
+    LaunchedEffect(reader, active) {
+        if (topic.usesMarkdownReader && (active || resumeBookmark?.hasUnreadReplies != true)) {
             loadReader()
             if (history.current === page && page.id == 0 && reader.state.value.error != null && resumeBookmark?.hasUnreadReplies != true) usesWeb = true
         }
     }
     Box(Modifier.fillMaxSize().background(TopicBackground)) {
-        Column(Modifier.fillMaxSize().then(if (topic.forum.supportsMarkdown) Modifier.background(TopicSurface).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)) else Modifier)) {
-            if (topic.forum.supportsMarkdown) {
+        Column(Modifier.fillMaxSize().then(if (topic.usesMarkdownReader) Modifier.background(TopicSurface).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)) else Modifier)) {
+            if (topic.usesMarkdownReader) {
                 Row(
                     Modifier.fillMaxWidth().background(TopicSurface).padding(horizontal = 16.dp).testTag("topic-forum-header"),
                     verticalAlignment = Alignment.CenterVertically,
@@ -179,16 +200,16 @@ private fun TopicDetailPage(
                         Text(topic.forum.name, fontWeight = FontWeight.SemiBold, maxLines = 1, fontSize = 14.sp)
                     }
                     TextButton(
-                        onClick = { usesWeb = !usesWeb },
+                        onClick = { usesWeb = !usesWeb; if (!usesWeb && !state.loaded && state.error == null) restart++ },
                         modifier = Modifier.testTag("topic-view-toggle").semantics {
-                            stateDescription = if (usesWeb) "Full page" else if (fullPageReady) "Ready" else "Loading full page"
+                            stateDescription = if (usesWeb) "Full page" else "Preview"
                         },
                     ) { Text(if (usesWeb) "Show preview" else "Full topic") }
                 }
             }
             Box(Modifier.weight(1f)) {
                 // Preserve each reader and its saved list position without retaining hidden native text views.
-                if (state.loaded) {
+                if (state.loaded && (active || hasBeenSelected)) {
                     Box(Modifier.fillMaxSize().then(if (usesWeb) Modifier.alpha(0f).clearAndSetSemantics { } else Modifier)) {
                         key(reader) {
                             articleState.SaveableStateProvider("$restart:${page.id}") {
@@ -213,10 +234,10 @@ private fun TopicDetailPage(
                     }
                 } else if (!usesWeb) {
                     when {
-                        state.error != null -> Column(
+                        state.error != null || convertedResumeError != null -> Column(
                             Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text(state.error!!)
+                            Text(convertedResumeError ?: state.error!!)
                             Button(onClick = { scope.launch { loadReader() } }) { Text("Retry") }
                             if (resumeBookmark?.hasUnreadReplies == true) Button(onClick = { restart++ }) { Text("Back to top") }
                             Button(onClick = { usesWeb = true }) { Text("View full page") }
@@ -229,8 +250,8 @@ private fun TopicDetailPage(
                     // AndroidView still participates in Compose hit testing when its native
                     // view is invisible. Put the preloader below the active scroll surface.
                     Box(Modifier.fillMaxSize().zIndex(if (usesWeb) 1f else -1f)) {
-                        CompositionLocalProvider(LocalMatchWebHeader provides !topic.forum.supportsMarkdown) {
-                            if (usesWeb || state.loaded) webContent(page.url, usesWeb && active) { fullPageReady = it }
+                        CompositionLocalProvider(LocalMatchWebHeader provides !topic.usesMarkdownReader) {
+                            if ((usesWeb && active) || hasOpenedWeb) webContent(fullPageUrl, usesWeb && active) {}
                         }
                     }
                 }

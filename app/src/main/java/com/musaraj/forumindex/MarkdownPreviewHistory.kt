@@ -18,9 +18,10 @@ internal class MarkdownPreviewPage(val id: Int, val url: URL, val reader: Markdo
 }
 
 /** Retains loaded readers on Back; linked URLs never borrow the feed topic's API identity. */
-internal class MarkdownPreviewHistory(url: URL, private val source: TopicMarkdownSource) {
+internal class MarkdownPreviewHistory(url: URL, private val source: TopicMarkdownSource, readerUrl: URL = url) {
+    constructor(url: URL, source: TopicMarkdownSource) : this(url, source, url)
     private var nextId = 1
-    private val mutablePages = MutableStateFlow(listOf(MarkdownPreviewPage(0, url, MarkdownTopicReader(url, source))))
+    private val mutablePages = MutableStateFlow(listOf(MarkdownPreviewPage(0, url, MarkdownTopicReader(readerUrl, source))))
     val pages = mutablePages.asStateFlow()
     val current get() = pages.value.last()
     val canGoBack get() = pages.value.size > 1
@@ -49,4 +50,4 @@ internal class MarkdownPreviewHistory(url: URL, private val source: TopicMarkdow
     }
 }
 
-internal fun Topic.bookmark() = StarredTopic(title, url.toString(), forum.name, id.takeIf { it > 0 }, forum.id.takeIf { it > 0 }, forum = forum, publishedAt = publishedAt, replyCount = replyCount, externalSignals = externalSignals)
+internal fun Topic.bookmark() = StarredTopic(title, url.toString(), forum.name, id.takeIf { it > 0 }, forum.id.takeIf { it > 0 }, forum = forum, publishedAt = publishedAt, replyCount = replyCount, externalSignals = externalSignals, readerMarkdownUrl = readerMarkdownUrl)

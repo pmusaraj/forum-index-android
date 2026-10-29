@@ -18,6 +18,41 @@ class RecentParityUiTest {
     private val topic = Topic(1, "Fixture topic", URL("https://forum.test/t/1"), "<p>An <b>excerpt</b> &amp; context.</p>", forum, null, 2,
         listOf(ExternalSignal(ExternalSignalSource.HACKER_NEWS, URL("https://news.ycombinator.com/item?id=1"))))
 
+    @Test fun longOneboxCanExpandAndCollapse() {
+        val markdown = "> <https://github.com/org/project>\n>\n" +
+            (1..40).joinToString("\n") { "> Line $it of the repository preview.\n>" }
+        compose.setContent {
+            ForumIndexTheme {
+                androidx.compose.foundation.layout.Column {
+                    MarkdownPostBody(markdown, rememberMarkdownRenderer(topic.url!!))
+                }
+            }
+        }
+        compose.onNodeWithText("Expand preview").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Collapse preview").assertExists()
+    }
+
+    @Test fun convertedReaderUsesMarkdownSourceButSharesOriginalPage() {
+        val converted = topic.copy(forum = forum.copy(supportsMarkdown = false), readerMarkdownUrl = URL("https://index.test/markdown/1"))
+        val requests = mutableListOf<String>()
+        val webRequests = mutableListOf<String>()
+        var bookmark: StarredTopic? = null
+        compose.setContent {
+            ForumIndexTheme {
+                TopicDetailScreen(TopicDetailSession.create(listOf(converted), converted, Destination.Main.id)!!,
+                    isStarred = { false }, onSelect = {}, onToggleStar = { bookmark = it }, onDismiss = {},
+                    source = { requests += it.toString(); MarkdownPage("Converted content", it) },
+                    webContent = { url, _, _ -> SideEffect { webRequests += url.toString() }; Box(Modifier.fillMaxSize()) })
+            }
+        }
+        compose.onNodeWithTag("topic-markdown-preview").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf(converted.readerMarkdownUrl.toString()), requests); assertTrue(webRequests.isEmpty()) }
+        compose.onNodeWithContentDescription("Bookmark").performClick()
+        compose.runOnIdle { assertEquals(topic.url.toString(), bookmark?.url); assertEquals(converted.readerMarkdownUrl, bookmark?.readerMarkdownUrl) }
+        compose.onNodeWithTag("topic-view-toggle").performClick()
+        compose.runOnIdle { assertEquals(topic.url.toString(), webRequests.last()) }
+    }
+
     @Test fun aboutRetriesWithoutOpeningTopicAndOffersExplicitOpen() {
         var calls = 0
         var opened = false
@@ -53,6 +88,7 @@ class RecentParityUiTest {
         compose.onNodeWithContentDescription("Fixture topic, Community, 2 replies, Discussed on Hacker News").assertExists()
         compose.onNodeWithTag("topic-7-1").performTouchInput { longClick() }
         compose.onNodeWithTag("topic-context-about").assertIsDisplayed()
+        compose.onNodeWithText("Not Interesting for Me").assertIsDisplayed()
     }
 
     @Test fun previewShowsDiscussionLinkAndRevealsTitleOnlyOnUpwardScroll() {
