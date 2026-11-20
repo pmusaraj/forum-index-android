@@ -50,9 +50,9 @@ class ForumIndexApiTest {
 
     @Test fun buildsExactProductionReadUrls() {
         val api = HttpForumIndexApi(connectionFactory = { FakeConnection(it) })
-        assertEquals("https://do3.musaraj.com/api/v2/subjects?window=5d&language=en", api.taxonomyUrl().toString())
-        assertEquals("https://do3.musaraj.com/api/v2/topics?feed=for_you&limit=30&page=2&language=en", api.personalizedTopicsUrl(2).toString())
-        assertEquals("https://do3.musaraj.com/api/v2/subjects/caf%C3%A9%20news/topics?feed=trending&limit=30&page=3&language=en", api.subjectTopicsUrl("café news", 3).toString())
+        assertEquals("https://forumindex.musaraj.com/api/v2/subjects?window=5d&language=en", api.taxonomyUrl().toString())
+        assertEquals("https://forumindex.musaraj.com/api/v2/topics?feed=for_you&limit=30&page=2&language=en", api.personalizedTopicsUrl(2).toString())
+        assertEquals("https://forumindex.musaraj.com/api/v2/subjects/caf%C3%A9%20news/topics?feed=trending&limit=30&page=3&language=en", api.subjectTopicsUrl("café news", 3).toString())
     }
 
     @Test fun rejectsUnsafeBasesPagesAndSlugs() {

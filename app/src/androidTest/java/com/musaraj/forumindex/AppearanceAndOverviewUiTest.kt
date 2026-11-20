@@ -15,9 +15,11 @@ class AppearanceAndOverviewUiTest {
 
     @Test fun appearancePickerUpdatesOpenSettingsAndReaderTogether() {
         var appearance by mutableStateOf(AppAppearance.LIGHT)
+        var typography by mutableStateOf(ReaderTypography.Compact)
         var background = Color.Unspecified
         compose.setContent {
-            CompositionLocalProvider(LocalAppearanceSettings provides AppearanceSettings(appearance) { appearance = it }) {
+            CompositionLocalProvider(LocalReaderTypography provides typography, LocalSelectTypography provides { typography = it },
+                LocalAppearanceSettings provides AppearanceSettings(appearance) { appearance = it }) {
                 ForumIndexTheme(appearance == AppAppearance.DARK) {
                     background = MaterialTheme.colorScheme.background
                     ForumIndexReader(UiState(
@@ -31,12 +33,15 @@ class AppearanceAndOverviewUiTest {
             }
         }
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithTag("appearance-dark").performClick().assertIsSelected()
+        compose.onNodeWithText("Compact").assertIsSelected()
+        compose.onNodeWithText("Spacious").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithTag("appearance-dark").performScrollTo().performClick().assertIsSelected()
         compose.runOnIdle { assertEquals(Color(0xFF1C1C1A), background) }
         compose.onNodeWithContentDescription("Close settings").performClick()
         compose.onNodeWithText("No topics yet").assertIsDisplayed()
         compose.runOnIdle { assertEquals(AppAppearance.DARK, appearance) }
         compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Spacious").assertIsSelected()
         compose.onNodeWithTag("appearance-light").performClick().assertIsSelected()
         compose.runOnIdle { assertEquals(Color(0xFFFAF6EE), background) }
         compose.onNodeWithTag("appearance-auto").performClick().assertIsSelected()

@@ -5,7 +5,7 @@ This is a source-code inventory for preparing disclosures, not a published priva
 | Data / behavior | Observed implementation | Disclosure follow-up |
 | --- | --- | --- |
 | Subject choices, opened topics, bookmarked topic details | Stored locally; feed cache is in memory; app backup disabled | Distinguish local storage from transmitted contribution actions |
-| Feed requests | HTTPS requests to `https://do3.musaraj.com`; subject/page choices in URLs | Confirm server/CDN IP, request logging, retention and purposes |
+| Feed requests | HTTPS requests to `https://forumindex.musaraj.com`; subject/page choices in URLs | Confirm server/CDN IP, request logging, retention and purposes |
 | Generated contributor name and device name | Sent on automatic enrollment unless opted out; device name editable | Assess personal info/name and user-provided content categories; explain automatic enrollment and persistent opt-out |
 | Installation identity and bearer token | Server-issued installation identity; bearer token encrypted locally with Android Keystore and used for authenticated requests | Assess user/device identifiers; this is pseudonymous, not guaranteed anonymous |
 | Reads, bookmark/remove-bookmark actions and topic reports | Topic ID, action kind and active flag sent while enrolled | Assess app interactions and relevant browsing-history categories; used to improve index and personalize feed |

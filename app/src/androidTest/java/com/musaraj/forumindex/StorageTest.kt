@@ -57,10 +57,13 @@ class StorageTest {
 
     @Test fun appearanceAndContributionChoicesSurviveNewStore() {
         assertEquals(AppAppearance.AUTO, preferences.appearance)
+        assertEquals(ReaderTypography.Compact, preferences.readerTypography)
+        preferences.readerTypography = ReaderTypography.Spacious
         preferences.appearance = AppAppearance.DARK
         preferences.contributionsOptedOut = true
         preferences.contributorDisplayName = "Reader-12345678"
         val restored = ForumIndexPreferences(context)
+        assertEquals(ReaderTypography.Spacious, restored.readerTypography)
         assertEquals(AppAppearance.DARK, restored.appearance)
         assertTrue(restored.contributionsOptedOut)
         assertEquals("Reader-12345678", restored.contributorDisplayName)

@@ -1,0 +1,2 @@
+Choose Compact or Spacious typography in Settings. Your choice is saved across launches.
+Markdown tables now have shaded headers and more space around cell contents.

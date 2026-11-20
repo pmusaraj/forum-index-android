@@ -50,12 +50,19 @@ import java.net.URL
 internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boolean = { false }, onImage: (TopicImage) -> Unit = {}): Markwon {
     val context = LocalContext.current
     val resources = LocalResources.current
+    val typography = LocalReaderTypography.current
     val colors = MaterialTheme.colorScheme
     val handleInternalLink by rememberUpdatedState(onInternalLink)
     val handleImage by rememberUpdatedState(onImage)
-    return remember(context, resources, baseUrl, colors) {
+    return remember(context, resources, baseUrl, colors, typography) {
         Markwon.builder(context)
-            .usePlugin(TablePlugin.create(context))
+            .usePlugin(TablePlugin.create {
+                it.tableCellPadding((12 * resources.displayMetrics.density).toInt())
+                    .tableHeaderRowBackgroundColor(colors.surfaceVariant.toArgb())
+                    .tableOddRowBackgroundColor(colors.surface.toArgb())
+                    .tableEvenRowBackgroundColor(colors.surface.toArgb())
+                    .tableBorderColor(colors.outlineVariant.toArgb()).tableBorderWidth(1)
+            })
             .usePlugin(StrikethroughPlugin.create())
             .usePlugin(TaskListPlugin.create(context))
             .usePlugin(ImagesPlugin.create { it.addSchemeHandler(TopicImageHandler(resources)) })
@@ -88,7 +95,8 @@ internal fun rememberMarkdownRenderer(baseUrl: URL, onInternalLink: (URL) -> Boo
                     builder.linkColor(colors.primary.toArgb())
                         .blockQuoteColor(colors.primary.toArgb())
                         .codeBackgroundColor(colors.surfaceVariant.toArgb())
-                        .codeTextSize(android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 16 * .85f, resources.displayMetrics).toInt())
+                        .headingTextSizeMultipliers(floatArrayOf(1.22f, 1.11f, 1f, 1f, 1f, 1f))
+                        .codeTextSize(android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, typography.bodySize * .85f, resources.displayMetrics).toInt())
                         .thematicBreakColor(colors.outlineVariant.copy(alpha = .5f).toArgb())
                         .thematicBreakHeight(1)
                 }
@@ -114,6 +122,7 @@ private fun MarkdownSegmentBody(segment: MarkdownSegment, renderer: Markwon, onR
     var expanded by rememberSaveable(markdown) { mutableStateOf(false) }
     var overflowing by remember(markdown) { mutableStateOf(false) }
     val previewHeight = with(LocalDensity.current) { 200.dp.roundToPx() }
+    val typography = LocalReaderTypography.current
     val colors = MaterialTheme.colorScheme
     val renderedCallback by rememberUpdatedState(onRendered)
     val rendered by produceState<Spanned?>(null, markdown, renderer) {
@@ -123,17 +132,17 @@ private fun MarkdownSegmentBody(segment: MarkdownSegment, renderer: Markwon, onR
         modifier = Modifier.fillMaxWidth(),
         factory = { context -> TextView(context).apply {
             typeface = context.resources.getFont(R.font.source_sans_3)
-            textSize = 16f
             setTextColor(colors.onSurface.toArgb())
             setLinkTextColor(colors.primary.toArgb())
             setTextIsSelectable(true)
             movementMethod = TableAwareMovementMethod.create()
-            setLineSpacing(0f, 1.15f)
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
                 overflowing = (layout?.height ?: 0) > previewHeight
             }
         } },
         update = { view ->
+            view.textSize = typography.bodySize
+            if (view.lineSpacingMultiplier != typography.leading) view.setLineSpacing(0f, typography.leading)
             view.maxHeight = if (segment.isOnebox && !expanded) previewHeight else Int.MAX_VALUE
             view.setTextColor(colors.onSurface.toArgb())
             view.setLinkTextColor(colors.primary.toArgb())

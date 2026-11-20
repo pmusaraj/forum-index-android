@@ -242,7 +242,7 @@ class TopicInteractionUiTest {
         compose.onNodeWithTag("appearance-picker").assertIsDisplayed()
         compose.onNodeWithText("This device enrolls automatically to improve recommendations. Reads, bookmarks, and reports are linked to a generated contributor profile. You can opt out below.").assertIsDisplayed()
         compose.onNodeWithTag("forum-submission-url").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("submit-forum").assertIsDisplayed()
+        compose.onNodeWithTag("submit-forum").performScrollTo().assertIsDisplayed()
         compose.runOnIdle {
             ui = ui.copy(contribution = ui.contribution.copy(submittingForum = true))
         }

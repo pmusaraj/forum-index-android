@@ -302,6 +302,7 @@ private fun TopicArticle(
         }
     }
     var selectedImage by remember(reader) { mutableStateOf<TopicImage?>(null) }
+    val typography = LocalReaderTypography.current
     val renderer = rememberMarkdownRenderer(state.baseUrl, onInternalLink) { selectedImage = it }
     if (selectedImage != null) TopicImageLightbox(selectedImage!!) { selectedImage = null }
     val renderedPosts = remember(reader) { mutableStateMapOf<Int, Boolean>() }
@@ -335,12 +336,12 @@ private fun TopicArticle(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(top = if (hasEarlierNavigation) 48.dp else 0.dp).background(TopicBackground).nestedScroll(scrollConnection).testTag("topic-markdown-preview"),
-            contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 190.dp),
+            contentPadding = PaddingValues(start = typography.inset.dp, top = 12.dp, end = typography.inset.dp, bottom = 190.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             item(key = "title") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                    Text(title, fontSize = typography.titleSize.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.onSizeChanged { titleHeight = it.height }.semantics { heading() }.testTag("topic-preview-title"))
                     val firstPost = state.posts.firstOrNull().takeIf { state.startsTopic }
                     TopicReaderMetadata(firstPost, publishedAt, state.summary != null, showsSummary) {

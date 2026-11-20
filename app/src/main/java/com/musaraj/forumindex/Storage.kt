@@ -54,6 +54,10 @@ interface PreferencesStore {
 class ForumIndexPreferences(context: Context) : PreferencesStore {
     private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
+    internal var readerTypography: ReaderTypography
+        get() = ReaderTypography.entries.firstOrNull { it.name == preferences.getString("reader_typography", null) } ?: ReaderTypography.Compact
+        set(value) { preferences.edit().putString("reader_typography", value.name).apply() }
+
     var appearance: AppAppearance
         get() = AppAppearance.entries.firstOrNull { it.name == preferences.getString("appearance", null) } ?: AppAppearance.AUTO
         set(value) { preferences.edit().putString("appearance", value.name).apply() }

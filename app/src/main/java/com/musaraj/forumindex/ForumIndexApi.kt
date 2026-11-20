@@ -8,7 +8,7 @@ import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 
-const val PRODUCTION_BASE_URL = "https://do3.musaraj.com"
+const val PRODUCTION_BASE_URL = "https://forumindex.musaraj.com"
 
 data class NavigationEnvelope(val version: String, val window: String, val subjects: List<Subject>)
 data class Subject(

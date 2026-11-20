@@ -43,13 +43,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             val preferences = remember { ForumIndexPreferences(applicationContext) }
             var appearance by remember { mutableStateOf(preferences.appearance) }
+            var typography by remember { mutableStateOf(preferences.readerTypography) }
             val dark = appearance == AppAppearance.DARK || (appearance == AppAppearance.AUTO && isSystemInDarkTheme())
             LaunchedEffect(dark) {
                 val style = if (dark) SystemBarStyle.dark(0xFF1C1C1A.toInt()) else SystemBarStyle.light(0xFFFAF6EE.toInt(), 0xFFFAF6EE.toInt())
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(if (dark) 0xFF1C1C1A.toInt() else 0xFFFAF6EE.toInt()))
             }
-            CompositionLocalProvider(LocalAppearanceSettings provides AppearanceSettings(appearance) {
+            CompositionLocalProvider(LocalReaderTypography provides typography, LocalSelectTypography provides { choice ->
+                preferences.readerTypography = choice
+                typography = choice
+            }, LocalAppearanceSettings provides AppearanceSettings(appearance) {
                 preferences.appearance = it
                 appearance = it
             }) {

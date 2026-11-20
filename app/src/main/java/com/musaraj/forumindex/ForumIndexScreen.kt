@@ -386,6 +386,7 @@ private fun ContributionSheet(
             Spacer(Modifier.height(20.dp))
             Button(onClick = onFeedback) { Text("Feedback") }
             Text("Appearance", fontWeight = FontWeight.SemiBold)
+            Text("Color scheme")
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().testTag("appearance-picker")) {
                 AppAppearance.entries.forEachIndexed { index, option ->
                     SegmentedButton(
@@ -397,6 +398,17 @@ private fun ContributionSheet(
                 }
             }
             Text("Auto follows your device’s appearance.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Typography")
+            val selectTypography = LocalSelectTypography.current
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                ReaderTypography.entries.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = LocalReaderTypography.current == option,
+                        onClick = { selectTypography(option) },
+                        shape = SegmentedButtonDefaults.itemShape(index, ReaderTypography.entries.size),
+                    ) { Text(option.label) }
+                }
+            }
             Spacer(Modifier.height(20.dp))
             Text(
                 "This device enrolls automatically to improve recommendations. Reads, bookmarks, and reports are linked to a generated contributor profile. You can opt out below.",

@@ -199,3 +199,10 @@ physical-device/TalkBack checks remain manual follow-up.
 Validation: 115 JVM tests passed on the final revision. The full Pixel 9 / Android 15 suite passed 59 tests with the opt-in store screenshot exporter skipped. After the final personalized-feed opt-out and asynchronous image-layout refinements, all five affected recent-feature UI tests passed again. Release APK assembly and release lint passed (0 errors, 34 warnings, 2 hints). Coverage includes feed discovery and hidden choices, public versus personalized credentials, report submission, reader-source decoding and persistence, converted unread resume, onebox parsing and expansion, linked-image clicks, cache expiration/eviction, retry delays, and existing scrolling/history regressions. Production reports were not submitted; live discovery/converter, physical-device, and TalkBack checks remain unverified.
 
 Physical-device follow-up: the user smoke-tested the separate Forum Index Test build on a Samsung SM-A145M and confirmed it looked good before authorizing release. The existing Google Play app and its data were preserved. This does not replace the outstanding TalkBack and targeted live-service checks.
+
+## November 19 changes (iOS 7d85a59)
+
+- [x] Persist Compact and Spacious reader typography and label the appearance picker Color scheme.
+- [x] Apply font-scaled body and heading sizes, line spacing, and article insets to native reader content.
+- [x] Style native Markdown tables for light and dark appearance using Markwon.
+- [x] Switch the production API host and verify the public v2 feed catalog.
