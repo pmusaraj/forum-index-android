@@ -88,6 +88,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -132,6 +133,7 @@ internal fun ForumIndexReader(
     onRegenerateNickname: () -> Unit = {},
     onSubmitForum: (String) -> Boolean = { false },
     onOptOut: () -> Unit = {},
+    onEraseContributorData: () -> Unit = {},
 ) {
     val visible = uiState.visibleDestinations
     var startupComplete by rememberSaveable { mutableStateOf(false) }
@@ -294,6 +296,8 @@ internal fun ForumIndexReader(
         onRegenerateNickname = onRegenerateNickname,
         onSubmitForum = onSubmitForum,
         onOptOut = onOptOut,
+        onEraseContributorData = onEraseContributorData,
+        sendingFeedback = uiState.sendingFeedback,
     )
 
     val explicitReportState = explicitReportTopicId?.let(uiState.contribution.reports::get)
@@ -344,10 +348,13 @@ private fun ContributionSheet(
     onRegenerateNickname: () -> Unit,
     onSubmitForum: (String) -> Boolean,
     onOptOut: () -> Unit,
+    onEraseContributorData: () -> Unit,
+    sendingFeedback: Boolean,
     onFeedback: () -> Unit = {},
 ) {
     val appearance = LocalAppearanceSettings.current
     var confirmOptOut by rememberSaveable { mutableStateOf(false) }
+    var confirmDeletion by rememberSaveable { mutableStateOf(false) }
     var forumURL by rememberSaveable { mutableStateOf("") }
     val installation = state.enrollment?.installation
 
@@ -489,6 +496,7 @@ private fun ContributionSheet(
             state.error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, maxLines = 3, modifier = Modifier.padding(vertical = 8.dp))
             }
+            state.deletionMessage?.let { Text(it, modifier = Modifier.padding(vertical = 8.dp)) }
 
             HorizontalDivider(Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
             Text("What is reported", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -496,7 +504,27 @@ private fun ContributionSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
             Text("Opening a topic counts as a read. Activity is sent only while contributions are enabled. Your bookmarks stay saved on this device.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 12.dp))
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    val linkStyle = androidx.compose.ui.text.TextLinkStyles(
+                        style = androidx.compose.ui.text.SpanStyle(color = ReaderAccent, textDecoration = TextDecoration.Underline),
+                    )
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url("https://theforumindex.com/privacy/", linkStyle)) {
+                        append("Privacy policy")
+                    }
+                    append("  ·  ")
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url("https://theforumindex.com/privacy/#delete-data", linkStyle)) {
+                        append("Request data deletion")
+                    }
+                },
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
             if (installation != null) {
+                TextButton(
+                    onClick = { confirmDeletion = true },
+                    enabled = !state.loading && !state.submittingForum && !sendingFeedback,
+                    modifier = Modifier.height(48.dp).testTag("delete-contributor-data"),
+                ) { Text("Delete contributor data") }
                 TextButton(
                     onClick = { confirmOptOut = true },
                     enabled = !state.loading && !state.submittingForum,
@@ -510,7 +538,7 @@ private fun ContributionSheet(
     if (confirmOptOut) AlertDialog(
         onDismissRequest = { confirmOptOut = false },
         title = { Text("Confirm opt out") },
-        text = { Text("Stop sending contribution actions? Your local bookmarks will remain on this device.") },
+        text = { Text("Stop sending contribution actions? This keeps your bookmarks and past contributions. To erase your data, choose Delete contributor data first.") },
         dismissButton = {
             TextButton(onClick = { confirmOptOut = false }, modifier = Modifier.height(48.dp)) { Text("Keep contributions") }
         },
@@ -519,6 +547,16 @@ private fun ContributionSheet(
                 onClick = { confirmOptOut = false; onOptOut() },
                 modifier = Modifier.height(48.dp).testTag("confirm-opt-out"),
             ) { Text("Opt out") }
+        },
+    )
+
+    if (confirmDeletion) AlertDialog(
+        onDismissRequest = { confirmDeletion = false },
+        title = { Text("Delete contributor data?") },
+        text = { Text("This deletes your contributor profile, activity, and feedback from Forum Index. It also clears bookmarks, reading history, and your feedback draft on this device. Contributions will turn off and you can still browse.") },
+        dismissButton = { TextButton(onClick = { confirmDeletion = false }) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(onClick = { confirmDeletion = false; onEraseContributorData() }) { Text("Delete data") }
         },
     )
 }

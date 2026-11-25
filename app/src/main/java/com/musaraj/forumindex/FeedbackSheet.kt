@@ -1,6 +1,5 @@
 package com.musaraj.forumindex
 
-import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,7 +15,7 @@ internal fun FeedbackSheet(
     onSend: (FeedbackSubmission, () -> Unit) -> Unit, onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val preferences = remember { context.getSharedPreferences("feedback", Context.MODE_PRIVATE) }
+    val preferences = remember { feedbackDraftPreferences(context) }
     var message by remember { mutableStateOf(preferences.getString("message", "").orEmpty()) }
     var requestId by remember { mutableStateOf(preferences.getString("request_id", null) ?: UUID.randomUUID().toString()) }
     val count = message.trim().let { it.codePointCount(0, it.length) }

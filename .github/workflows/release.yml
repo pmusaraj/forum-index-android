@@ -83,8 +83,10 @@ jobs:
           mkdir -p dist
           apk="forum-index-${GITHUB_REF_NAME}.apk"
           cp app/build/outputs/apk/release/app-release.apk "dist/$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "dist/$apk"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "dist/$apk" > dist/signing-certificate.txt
           cat dist/signing-certificate.txt
+          grep -Fx 'Signer #1 certificate SHA-256 digest: 41a43761c359100138dae9950216a0d113d23b355a5362c7ef5006080b83c768' dist/signing-certificate.txt
           aab="forum-index-${GITHUB_REF_NAME}.aab"
           cp app/build/outputs/bundle/release/app-release.aab "dist/$aab"
           jarsigner -verify "dist/$aab" | tee "$RUNNER_TEMP/bundle-verification.txt"

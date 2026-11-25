@@ -232,6 +232,22 @@ class TopicInteractionUiTest {
         compose.onNodeWithTag("starred-10-1").assertIsDisplayed()
     }
 
+    @Test fun settingsLinksToPrivacyAndRequiresConfirmationBeforeDeletingContributorData() {
+        var deletions = 0
+        compose.setContent {
+            ForumIndexReader(state(listOf(topic()), enrolled = true), onEraseContributorData = { deletions++ })
+        }
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onNodeWithText("Privacy policy", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("delete-contributor-data").performScrollTo().performClick()
+        compose.onNodeWithText("Delete contributor data?").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle { assertEquals(0, deletions) }
+        compose.onNodeWithTag("delete-contributor-data").performScrollTo().performClick()
+        compose.onNodeWithText("Delete data").performClick()
+        compose.runOnIdle { assertEquals(1, deletions) }
+    }
+
     @Test fun trustedSettingsExplainPersonalizationAndShowForumSubmission() {
         var ui by mutableStateOf(state(emptyList(), enrolled = true, trusted = true))
         compose.setContent { ForumIndexReader(ui, emptyList()) }

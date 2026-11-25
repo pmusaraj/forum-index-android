@@ -1,6 +1,6 @@
 # Google Play listing assets
 
-Open [the review gallery](index.html) to inspect the artwork and all screenshot sets. These assets are prepared locally; they have not been uploaded to Play Console.
+Open [the review gallery](index.html) to inspect the artwork and all screenshot sets. Compare the repository copies with the assets currently displayed in each store before uploading replacements.
 
 | Play Console field | File or folder | Dimensions |
 | --- | --- | --- |

@@ -59,7 +59,8 @@ class MarkdownPreviewHistoryTest {
         assertNull(bookmark.forumId)
         assertEquals("https://forum.example/t/linked/456/7", bookmark.url)
         history.back()
-        assertEquals(topic.bookmark(), history.current.bookmark(topic))
+        val rootBookmark = history.current.bookmark(topic)
+        assertEquals(topic.bookmark().copy(addedAt = rootBookmark.addedAt, lastReadAt = rootBookmark.lastReadAt), rootBookmark)
     }
 
     @Test fun migrationUsesFinalOriginForInternalLinks() = runTest {

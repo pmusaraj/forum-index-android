@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
                             onRegenerateNickname = { model.regenerateNickname() },
                             onSubmitForum = model::submitForum,
                             onOptOut = model::optOut,
+                            onEraseContributorData = model::eraseContributorData,
                             onOpenStarred = model::openBookmark,
                             onRemoveStar = model::removeStar,
                             onSendFeedback = model::submitFeedback,

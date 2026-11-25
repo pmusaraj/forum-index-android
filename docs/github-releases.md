@@ -1,6 +1,6 @@
 # GitHub APK releases
 
-Pushing a version tag runs `.github/workflows/release.yml`: unit tests, release lint, signed APK/AAB builds, signature verification, and publication to GitHub Releases. New releases include the APK, Play AAB, `SHA256SUMS`, and public APK signing-certificate details. The release remains a draft until all assets upload successfully. Already published releases are never overwritten by the workflow. When `PLAY_UPLOADS_ENABLED=true`, the signed AAB is then [released to Play Internal testing](play-testing-automation.md); the separate Play workflow supports retries without rebuilding.
+Pushing a version tag runs `.github/workflows/release.yml` to test, lint, build the signed APK and AAB, and publish them to GitHub Releases. The workflow checks 16 KB APK ZIP alignment and the expected release certificate before publishing. New releases include both binaries, `SHA256SUMS`, and the public APK signing certificate details. When `PLAY_UPLOADS_ENABLED=true`, the signed AAB is then [released to Play Internal testing](play-testing-automation.md). The separate Play workflow supports retries without rebuilding.
 
 ## Publish
 
@@ -40,7 +40,7 @@ The workflow maps these to the existing `FORUM_INDEX_UPLOAD_*` Gradle environmen
 
 Keep an independent secure backup of the keystore and passwords. GitHub secrets cannot be downloaded for recovery; losing the key prevents updating existing installations. During initial setup, a local backup was created outside the checkout under `~/.local/share/forum-index-android/signing/` with owner-only permissions. Copy that directory into your encrypted backup or password manager.
 
-This key is separate from Google Play App Signing. GitHub APKs and Play builds can update each other only if their application ID and app signing certificate match. See [the Play release guide](play-store-release.md) before configuring Play distribution. A debug build also has a different certificate and must be uninstalled before installing the release APK; uninstalling removes its local app data.
+Compare the GitHub APK certificate with the app signing certificate in Play Console. GitHub APKs and Play builds can update each other when Android accepts the signing identity for the same application ID and version progression. See [the Play release guide](play-store-release.md) and the [other Android stores guide](other-android-stores.md). To switch from a debug build to the release APK, uninstall the debug build first. Uninstalling clears local app data.
 
 ## Verify a download
 

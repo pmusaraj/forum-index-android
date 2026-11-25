@@ -1,88 +1,47 @@
 # Google Play release
 
-## Current status
+The [Forum Index Play listing](https://play.google.com/store/apps/details?id=com.musaraj.forumindex) is public. [GitHub v1.0.8](https://github.com/pmusaraj/forum-index-android/releases/tag/v1.0.8) includes a signed APK and AAB. The [release workflow](https://github.com/pmusaraj/forum-index-android/actions/runs/44663009628) uploaded code `10008` to Internal testing. Check Play Console for the version currently served to production and the highest uploaded version code.
 
-Package: `com.musaraj.forumindex`, confirmed for the prepared Play Console app on October 3, 2026. Minimum Android version: 9 (API 28); compile/target SDK: 37. Check the latest [target API requirements](https://developer.android.com/google/play/requirements/target-sdk) before submission.
+## Prepare the update
 
-The first testing upload was completed in Play Console (confirmed October 4, 2026). The prepared first bundle is version `1.0.0`, code `10000`. Use a new version code for subsequent uploads and follow the [shared version numbering scheme](github-releases.md); local Gradle defaults (`1.0`, code `1`) are not the published release version. See [testing automation](play-testing-automation.md) for GitHub authentication, automatic internal releases, and manual retries.
+1. Deploy the website privacy policy changes from the `forum-index-website` checkout. Open `https://theforumindex.com/privacy/` and `https://theforumindex.com/privacy/#delete-data` in a signed-out browser. Verify the deletion section and confirm that the support inbox can receive and resolve deletion requests for people who have opted out, uninstalled, or lost access to their device.
+2. Run unit tests, release lint, and device tests. On a dedicated test installation, try deleting contributor data once offline and once online. Confirm an offline failure can be retried, and that successful deletion clears the local profile, history, bookmarks, and draft, with contributions still off after relaunch. Check browsing, Markdown/WebView, bookmarks, reporting, and feedback on current Android and Android 9. Verify startup and reader behavior on a [16 KB emulator or device](https://developer.android.com/guide/practices/page-sizes).
+3. Use the [shared tag/version workflow](github-releases.md) to generate signed binaries. The prepared version is `1.0.9` with code `10009`. If that code is already uploaded, pick a higher code and update the release-note filename. CI publishes the signed APK and AAB on GitHub and can upload the same AAB to [Internal testing](play-testing-automation.md).
+4. Install the Play-delivered test build and review the Console pre-launch report. In **Setup → App integrity**, compare the Play **app signing** certificate SHA-256 with the [GitHub APK signing certificate](github-releases.md#signing). Play uses the **upload** certificate to authorize the uploaded AAB. Cross-store Android updates depend on the installed app signing identity and version code. See [Play App Signing](https://developer.android.com/studio/publish/app-signing).
 
-## Upload signing
+## Play Console fields
 
-For the first Play upload, no build or upload certificate has been registered yet (confirmed October 3, 2026). The first bundle uses the existing GitHub release key, whose public certificate fingerprint is recorded in [the GitHub release guide](github-releases.md).
+| Field | Value or action |
+| --- | --- |
+| Application ID | `com.musaraj.forumindex` |
+| Binary | `forum-index-v1.0.9.aab` or the next available release, signed by the existing upload key |
+| Minimum and target SDK | Android 9 (API 28) minimum. API 37 target meets the current API 36 submission minimum. [Google Play target requirements](https://support.google.com/googleplay/android-developer/answer/11926878) |
+| Title, descriptions, screenshots and icon | [English listing draft and artwork](../store/README.md). Compare with the live listing before replacing images or text. |
+| Release notes | [English notes for code 10009](../store/release-notes/en-US/10009.txt) |
+| Website and privacy policy | `https://theforumindex.com/` and `https://theforumindex.com/privacy/` |
+| Account/data deletion URL | `https://theforumindex.com/privacy/#delete-data` after deploy. [Play deletion requirements](https://support.google.com/googleplay/android-developer/answer/13327111) |
+| Support email | The live Play listing shows `info@theforumindex.com`. The website uses `hey@theforumindex.com` for privacy requests. Verify both inboxes or use one monitored address consistently. |
+| App content | Recheck Data safety, Ads, App access, Content rating, target audience, and applicable user-generated content requirements. Use the [privacy data inventory](privacy-data-inventory.md) and answer for the live service and content. |
 
-Before completing Play App Signing enrollment, choose the app signing identity deliberately: import the existing GitHub signing key using Play Console's PEPK instructions if Play builds should update GitHub installations. Letting Google generate a different app signing key prevents updates between those distributions, even when the bundle uses the GitHub key as its upload key. A public upload certificate alone does not transfer the app signing key. Keep the keystore, passwords, and encrypted private-key export out of Git and GitHub Release assets.
+**Reviewer notes.** Reading requires an internet connection and opens without a login. The app automatically creates a contributor profile. In Settings, reviewers can opt out, delete contributor data, regenerate the nickname, or open the privacy policy. Topic actions include reports for low-quality or inappropriate content and the wrong subject. Trusted forum submissions require backend-granted access. If the store requests access to this feature, provide steps and access in App access. Android installations appear as device-unverified.
 
-Use an existing upload key if this package is already registered. For a new app, create a dedicated upload key outside the repository. Let `keytool` prompt for passwords:
+Use the existing listing in Play Console. Review any tasks under **App content** and **Publishing overview**, then promote the tested bundle to Production or select it from the app bundle library. If production access is still restricted by the [new personal account testing rule](https://support.google.com/googleplay/android-developer/answer/14151465), use a closed test with 12 testers opted in continuously for at least 14 days before applying. Internal and open testing are distinct from the required closed test.
 
-```sh
-keytool -genkeypair -v -keystore /absolute/private/path/forum-index-upload.jks \
-  -alias forum-index-upload -keyalg RSA -keysize 2048 -validity 10000
-```
+## Build a signed bundle locally
 
-Back up the key and passwords securely. Configure these variables locally or as CI secrets (do not paste passwords into committed files or command history):
+Use the upload key registered for this app. Load credentials from your local secure storage into these environment variables. The release workflow already supplies the equivalent values from GitHub Actions secrets.
 
 | Environment variable | Value |
 | --- | --- |
-| `FORUM_INDEX_UPLOAD_STORE_FILE` | Absolute path to the upload keystore |
+| `FORUM_INDEX_UPLOAD_STORE_FILE` | Absolute path to the existing upload keystore |
 | `FORUM_INDEX_UPLOAD_STORE_PASSWORD` | Keystore password |
 | `FORUM_INDEX_UPLOAD_KEY_ALIAS` | Upload key alias |
 | `FORUM_INDEX_UPLOAD_KEY_PASSWORD` | Private key password |
 
-All four variables are required for `bundleRelease`. Debug builds and unsigned release APK validation work without them. Release builds never fall back to debug signing. Keep signing builds off shared machines with untrusted users; do not publish Gradle diagnostic dumps containing credentials.
-
 ```sh
-./gradlew checkPlaySigning
 ./gradlew testDebugUnitTest lintRelease bundleRelease \
-  -PreleaseVersionCode=10000 -PreleaseVersionName=1.0.0
+  -PreleaseVersionCode=10009 -PreleaseVersionName=1.0.9
 jarsigner -verify app/build/outputs/bundle/release/app-release.aab
 ```
 
-Upload `app/build/outputs/bundle/release/app-release.aab`. Increment the version code for every subsequent upload, including testing tracks. Check that `jarsigner` reports a verified signature, and compare the signing certificate with your expected upload certificate. A self-signed upload certificate is normal. Enroll in [Play App Signing](https://developer.android.com/studio/publish/app-signing); Google manages the app signing key separately from your upload key.
-
-## Store materials
-
-Draft English copy is in `store/listings/en-US/`; first-release notes are in `store/release-notes/en-US/1.txt`. These are plain text for copying into Console, not a configured automatic publishing integration.
-
-- Supply a support email, public privacy-policy URL, and optional website.
-- Store icon, feature graphic, and five Android screenshots per appearance for phone and tablet are prepared in `store/`. See the [asset gallery](../store/index.html) and [upload instructions](../store/README.md).
-- Select the category, audience, countries, and pricing, and complete the content-rating questionnaire based on the forum content users can encounter. Do not assume the app is suitable for children.
-
-See Google's [preview asset specifications](https://support.google.com/googleplay/android-developer/answer/9866151).
-
-## Privacy and review blockers
-
-- Publish a complete privacy policy naming Forum Index and its operator, with a contact address, collection/use/sharing practices, retention periods, and deletion process. Add an accessible link inside the app before submission. No policy URL is currently configured.
-- Use [privacy-data-inventory.md](privacy-data-inventory.md) to complete Data safety after confirming backend logging, storage, retention, and third-party forum behavior. Do not declare “no data collected” based solely on the absence of an analytics SDK.
-- Confirm whether contributor enrollment falls under Google's account-creation rules. The app sends a DELETE request when opting out, but backend deletion semantics have not been verified here. If applicable, provide clear in-app account/data deletion and a functional external deletion-request page. “Opt out” alone must not be assumed to satisfy the policy.
-- Review user-generated-content obligations for indexed forums, moderation/report handling, and any account interaction available through the embedded forum pages.
-- Complete Ads, App access, Target audience, Content rating, Data safety, and other applicable Console declarations. No advertising SDK appears in the direct app dependencies; verify third-party content before answering the Ads declaration.
-- Reviewer instructions: new devices enroll automatically using a generated contributor name and detected device name. Tap Settings to opt out, re-enable contributions, generate a new nickname, or choose Auto/Light/Dark appearance. Basic reading remains available after opting out. Trusted forum-submission tools require backend-granted status; arrange reviewer access/instructions if included in review scope. Android attestation is not implemented, so installs show as device-unverified.
-
-References: [User data policy](https://support.google.com/googleplay/android-developer/answer/10144311), [account deletion](https://support.google.com/googleplay/android-developer/answer/13327111).
-
-## Test and submit
-
-1. Run unit tests, release lint, and the signed bundle build above. Run `./gradlew connectedDebugAndroidTest` on an emulator or device. Inspect `app/build/reports/` for failures.
-2. Upload the signed AAB to internal testing. Install the Play-delivered build to validate signing and bundle delivery; inspect the pre-launch report and resolve crashes/accessibility issues.
-3. Smoke-test Android 9 and a current Android device: loading and offline retry, paging, subject selection, saved bookmarks after restart, WebView navigation, sharing, enrollment, read/bookmark/report submissions, and opt-out. Include a 16 KB page-size device/emulator: Compose brings a native graphics library into the bundle. Confirm opting out stops future submissions and verify server-side deletion/retention behavior.
-4. Complete account verification and Play Console setup. For personal accounts created after November 13, 2023, check the [closed-testing requirement](https://support.google.com/googleplay/android-developer/answer/14151465): at least 12 testers continuously opted in for 14 days before applying for production access. Internal testing does not substitute for this.
-5. Finish listing assets and declarations, resolve Console warnings, then submit for review. Recheck current requirements at submission time.
-
-## Local preparation validation (2026-09-21)
-
-- All 47 JVM tests passed; `assembleRelease` succeeded.
-- `lintRelease` completed with 0 errors and 26 warnings (dependency updates, launcher icon shape, and code-style/catalog suggestions).
-- Missing upload credentials correctly fail `checkPlaySigning`.
-- `bundleRelease` succeeded with a disposable test key and its JAR signature verified. The disposable test bundle is not a production upload artifact. Build again with the real upload key before submission.
-- Store text fits the title, short-description, and full-description character limits.
-- Device/UI tests were not run: no device or emulator was connected. Play-delivered and 16 KB device checks remain pending.
-
-## Published update: 1.0.4 (October 20, 2026)
-
-[Version 1.0.4](https://github.com/pmusaraj/forum-index-android/releases/tag/v1.0.4), code `10004`, is published with signed APK/AAB assets, checksums, and the existing release certificate. Release commit: `3d4141358544b90be12fc7cd14934d766c178c74`. The release workflow successfully uploaded to internal testing, and the [open-testing workflow](https://github.com/pmusaraj/forum-index-android/actions/runs/39477953523) committed the same bundle to `beta` after user approval. Google Play processing/review may still apply.
-
-The GitHub notes are published. Listing copy, screenshot files, and Play release-note text remain repository assets; the current testing workflow does not upload those store materials.
-
-English release notes: `store/release-notes/en-US/10004.txt`. Updated listing copy and phone/tablet Bookmarks screenshots replace the previous star terminology. The current publishing script does not upload listing copy or release-note files, so apply these explicitly when publishing. Tagging also triggers the configured automatic internal-testing workflow; open testing is a separate step after approval.
-
-Validation: 95 JVM tests, release lint (0 errors), signed APK/AAB assembly, APK and bundle signatures, embedded APK version/package, and 9 offline publisher tests passed. The preceding full phone emulator suite passed 50 tests (one optional screenshot exporter skipped). The final button-color/store-image changes are checked by fresh emulator captures.
+Verify the signature and compare the public certificate with the registered upload certificate. Keep signing credentials and private keys outside the checkout. `bundleRelease` requires upload signing credentials. `assembleRelease` without credentials is suitable for an unsigned build check.

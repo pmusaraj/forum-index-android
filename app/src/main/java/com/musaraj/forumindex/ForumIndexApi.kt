@@ -88,6 +88,7 @@ interface ForumIndexApi {
     fun updateInstallation(deviceName: String, token: String): Installation
     fun updateDisplayName(displayName: String, token: String): Installation { throw UnsupportedOperationException() }
     fun deleteInstallation(token: String)
+    fun eraseInstallationData(token: String) { throw UnsupportedOperationException() }
     fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String)
     fun submitForum(url: String, token: String)
     fun submitFeedback(submission: FeedbackSubmission, token: String) { throw UnsupportedOperationException() }
@@ -225,6 +226,10 @@ class HttpForumIndexApi(
         request(url("/api/v2/installation"), "DELETE", token = checkedToken(token))
     }
 
+    override fun eraseInstallationData(token: String) {
+        request(url("/api/v2/installation/data"), "DELETE", token = checkedToken(token), expectedStatus = 204)
+    }
+
     override fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String) {
         require(topicId > 0) { "topic id must be positive" }
         val body = JSONObject().put("kind", kind).put("active", active).toString()
@@ -245,6 +250,7 @@ class HttpForumIndexApi(
         body: String? = null,
         token: String? = null,
         forbiddenExpiresAccess: Boolean = true,
+        expectedStatus: Int? = null,
     ): String {
         val connection = try {
             connectionFactory(url)
@@ -268,6 +274,8 @@ class HttpForumIndexApi(
                 throw ForumIndexApiException.ExpiredAccess()
             }
             if (status !in 200..299) throw ForumIndexApiException.Http(status)
+            if (expectedStatus != null && status != expectedStatus) throw ForumIndexApiException.InvalidResponse()
+            if (status == 204) return ""
             return readBounded(connection.inputStream, MAX_RESPONSE_BYTES)
         } catch (error: ForumIndexApiException) {
             throw error

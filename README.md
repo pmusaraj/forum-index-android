@@ -45,6 +45,6 @@ Recent iOS parity additions include server-discovered feeds with persistent tab 
 
 The interface and native Markdown reader bundle Source Sans 3 from [Adobe's font repository](https://github.com/adobe-fonts/source-sans/tree/87b37a2daaed80fcb8e8ccb0085c4d72ddade12e), including regular, medium, semibold, bold, and their italics. The wordmark retains its original typeface. The SIL Open Font License is included in `app/src/main/assets/licenses/source-sans-3.txt`.
 
-## Google Play release
+## Store releases
 
-See [the release guide](docs/play-store-release.md) for upload signing, versioning, bundle builds, store materials, testing, and remaining Console requirements. Store listing drafts are in `store/`, alongside the [icon, feature graphic, and Android screenshot gallery](store/index.html). The [asset guide](store/README.md) explains uploads and regeneration; the [data inventory](docs/privacy-data-inventory.md) supports privacy-policy and Data safety preparation.
+See the [Google Play release guide](docs/play-store-release.md) and the [Galaxy Store and AppGallery submission guide](docs/other-android-stores.md). Listing copy, release notes, and the [icon, feature graphic, and Android screenshot gallery](store/index.html) are in `store/`. The [asset guide](store/README.md) explains uploads and regeneration. Use the [data inventory](docs/privacy-data-inventory.md) when reviewing store disclosures.

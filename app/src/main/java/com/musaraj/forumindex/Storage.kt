@@ -47,12 +47,18 @@ interface PreferencesStore {
     var contributionsOptedOut: Boolean
     var contributorDisplayName: String?
     var deviceNameOverride: String?
+    fun clearFeedbackDraft()
     fun markOpened(forumId: Int, topicId: Int)
     fun isOpened(forumId: Int, topicId: Int): Boolean
 }
 
 class ForumIndexPreferences(context: Context) : PreferencesStore {
     private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+    private val feedback = feedbackDraftPreferences(context)
+
+    override fun clearFeedbackDraft() {
+        feedback.edit().clear().apply()
+    }
 
     internal var readerTypography: ReaderTypography
         get() = ReaderTypography.entries.firstOrNull { it.name == preferences.getString("reader_typography", null) } ?: ReaderTypography.Compact
@@ -175,6 +181,9 @@ class ForumIndexPreferences(context: Context) : PreferencesStore {
         const val DEVICE_NAME = "device_name"
     }
 }
+
+internal fun feedbackDraftPreferences(context: Context): SharedPreferences =
+    context.getSharedPreferences("feedback", Context.MODE_PRIVATE)
 
 interface EnrollmentStore {
     fun save(enrollment: Enrollment)

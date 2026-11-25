@@ -61,6 +61,7 @@ data class ContributionState(
     val nickname: String? = null,
     val submittingForum: Boolean = false,
     val forumSubmissionMessage: String? = null,
+    val deletionMessage: String? = null,
 )
 
 data class UiState(
@@ -165,10 +166,9 @@ class ForumIndexViewModel(
     init { reloadEnrollment() }
 
     private var automaticEnrollmentDevice: String? = null
+    private val suggestedNickname by lazy { DeviceNickname.generate() }
     val defaultDisplayName: String
-        get() = preferences.contributorDisplayName ?: DeviceNickname.generate().also {
-            preferences.contributorDisplayName = it
-        }
+        get() = preferences.contributorDisplayName ?: suggestedNickname
 
     private fun enrollAutomaticallyIfNeeded() {
         val device = automaticEnrollmentDevice ?: return
@@ -745,10 +745,64 @@ class ForumIndexViewModel(
         }
     }
 
+    fun eraseContributorData() {
+        val state = mutableUiState.value
+        val token = state.contribution.enrollment?.token ?: return
+        if (state.contribution.loading || state.contribution.submittingForum || state.sendingFeedback) return
+        val generation = ++contributionGeneration
+        contributionLoading()
+        viewModelScope.launch {
+            try {
+                calls.run { api.eraseInstallationData(token) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: ForumIndexApiException.ExpiredAccess) {
+                if (contributionMatches(generation, token)) {
+                    contributionFailure("Couldn’t confirm deletion. Contact privacy support for help.")
+                }
+                return@launch
+            } catch (_: Exception) {
+                if (contributionMatches(generation, token)) {
+                    contributionFailure("Couldn’t confirm deletion. Try again or contact privacy support.")
+                }
+                return@launch
+            }
+            if (!contributionMatches(generation, token)) return@launch
+
+            val cleanupFinished = try {
+                preferences.contributionsOptedOut = true
+                preferences.contributorDisplayName = null
+                preferences.deviceNameOverride = null
+                preferences.openedTopicIds = emptySet()
+                preferences.forYouIntroduced = false
+                preferences.introducedFeedIds = emptySet()
+                preferences.clearFeedbackDraft()
+                saveStars(emptyList())
+                tokenStore.delete()
+                true
+            } catch (_: Exception) {
+                false
+            }
+            contributionSuccess(null)
+            reloadMainFeed()
+            val latest = mutableUiState.value
+            mutableUiState.value = latest.copy(
+                openedTopicIds = preferences.openedTopicIds,
+                feedbackResult = null,
+                contribution = latest.contribution.copy(
+                    reports = emptyMap(),
+                    deletionMessage = if (cleanupFinished) "Contributor data deleted. Contributions are off."
+                    else "Server data was deleted. Clear Forum Index storage in Android Settings to remove any remaining local data.",
+                ),
+            )
+        }
+    }
+
     private fun contributionLoading() {
         mutableUiState.value = mutableUiState.value.copy(
             contribution = mutableUiState.value.contribution.copy(
                 loading = true, error = null, submittingForum = false, forumSubmissionMessage = null,
+                deletionMessage = null,
             ),
         )
     }

@@ -419,6 +419,55 @@ class ForumIndexViewModelTest {
         assertEquals(listOf("delete:token"), api.calls.filter { it.startsWith("delete:") })
     }
 
+    @Test fun deletingContributorDataClearsLocalDataAfterServerAcknowledgesAndStaysOptedOut() = runTest(dispatcher.scheduler) {
+        val store = MemoryTokenStore(enrollment())
+        val prefs = MemoryPreferences(stars = listOf(star(7)), openedTopicIds = setOf("1:7"), deviceNameOverride = "Tablet")
+        val api = FakeApi()
+        val vm = viewModel(api, prefs, store)
+        advanceUntilIdle()
+
+        vm.eraseContributorData()
+        advanceUntilIdle()
+
+        assertTrue("erase:token" in api.calls)
+        assertFalse("delete:token" in api.calls)
+        assertNull(store.value)
+        assertNull(prefs.contributorDisplayName)
+        assertNull(prefs.deviceNameOverride)
+        assertTrue(prefs.feedbackDraftCleared)
+        assertTrue(vm.stars.value.isEmpty())
+        assertTrue(vm.uiState.value.openedTopicIds.isEmpty())
+        assertNull(vm.uiState.value.contribution.enrollment)
+        assertNotNull(vm.uiState.value.contribution.deletionMessage)
+
+        val restored = viewModel(api, prefs, store)
+        restored.launch("Phone")
+        advanceUntilIdle()
+        assertFalse(api.calls.any { it.startsWith("create:") })
+    }
+
+    @Test fun failedContributorDeletionKeepsTheCredentialAndAllowsRetry() = runTest(dispatcher.scheduler) {
+        val store = MemoryTokenStore(enrollment())
+        val prefs = MemoryPreferences(stars = listOf(star(7)))
+        val api = FakeApi().apply { eraseFailure = true }
+        val vm = viewModel(api, prefs, store)
+        advanceUntilIdle()
+
+        vm.eraseContributorData()
+        advanceUntilIdle()
+
+        assertNotNull(store.value)
+        assertFalse(prefs.contributionsOptedOut)
+        assertEquals(1, vm.stars.value.size)
+        assertNotNull(vm.uiState.value.contribution.error)
+
+        api.eraseFailure = false
+        vm.eraseContributorData()
+        advanceUntilIdle()
+        assertEquals(2, api.calls.count { it == "erase:token" })
+        assertNull(store.value)
+    }
+
     @Test fun staleContributionResultCannotOverwriteReloadedEnrollment() = runTest(dispatcher.scheduler) {
         val old = enrollment("old")
         val newer = enrollment("new").copy(installation = enrollment("new").installation.copy(deviceName = "New"))
@@ -793,6 +842,8 @@ class ForumIndexViewModelTest {
         override var introducedFeedIds = emptySet<String>()
         override var contributionsOptedOut = false
         override var contributorDisplayName: String? = null
+        var feedbackDraftCleared = false
+        override fun clearFeedbackDraft() { feedbackDraftCleared = true }
         override fun markOpened(forumId: Int, topicId: Int) { openedTopicIds += "$forumId:$topicId" }
         override fun isOpened(forumId: Int, topicId: Int) = "$forumId:$topicId" in openedTopicIds
     }
@@ -886,6 +937,11 @@ class ForumIndexViewModelTest {
             calls += "delete:$token"
             if (expireDelete) throw ForumIndexApiException.ExpiredAccess()
             if (deleteFailure) error("unexpected delete failure")
+        }
+        var eraseFailure = false
+        override fun eraseInstallationData(token: String) {
+            calls += "erase:$token"
+            if (eraseFailure) throw ForumIndexApiException.Transport()
         }
         override fun setTopicAction(topicId: Int, kind: String, active: Boolean, token: String) {
             calls += "action:$topicId:$kind:$active"

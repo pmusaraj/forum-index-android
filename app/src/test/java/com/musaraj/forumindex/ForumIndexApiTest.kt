@@ -8,6 +8,23 @@ import java.net.URL
 import java.time.Instant
 
 class ForumIndexApiTest {
+    @Test fun contributorErasureUsesAuthenticatedDeleteAndRequiresNoContent() {
+        lateinit var call: FakeConnection
+        var status = 204
+        val api = HttpForumIndexApi(connectionFactory = { FakeConnection(it, "", status).also { call = it } })
+
+        api.eraseInstallationData("test-token")
+
+        assertEquals("/api/v2/installation/data", call.url.path)
+        assertEquals("DELETE", call.requestMethod)
+        assertEquals("Bearer test-token", call.headers["Authorization"])
+        assertEquals("", call.sentBody())
+        status = 202
+        assertThrows(ForumIndexApiException.InvalidResponse::class.java) { api.eraseInstallationData("test-token") }
+        status = 401
+        assertThrows(ForumIndexApiException.ExpiredAccess::class.java) { api.eraseInstallationData("test-token") }
+    }
+
     @Test fun externalSignalsAreOptionalAndInvalidEntriesDoNotLoseTopics() {
         fun decode(field: String) = ForumIndexJson.feed("""{"count":1,"results":[{"id":1,"title":"Topic","forum":{"id":1,"name":"Forum","slug":"forum"}$field}]}""").results.single()
         listOf("", ",\"external_signals\":null", ",\"external_signals\":{}", ",\"external_signals\":[]").forEach {
