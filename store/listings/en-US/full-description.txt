@@ -9,4 +9,4 @@ Features:
 • Read topics in the built-in viewer or open them externally.
 • Unlock For You recommendations through reading, bookmarking, and topic reports, with persistent opt-out in Settings.
 
-Your device automatically enrolls with a friendly nickname. In Settings, you can turn off contributions and keep browsing with your existing bookmarks, or delete your contributor data. You can also generate a new nickname and choose Auto, Light, or Dark appearance. An internet connection is required to load feeds and forum pages.
+You can browse without signing in. The app automatically creates a contributor profile with a generated nickname. In Settings, you can turn off contributions and keep browsing with your existing bookmarks. You can also generate a new nickname and choose Auto, Light, or Dark appearance. An internet connection is required to load feeds and forum pages.

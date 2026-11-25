@@ -25,9 +25,13 @@ class FakeAPI:
             return {"tracks": [{"track": "internal", "releases": self.releases}]}
         if method == "GET" and url.endswith("/bundles"):
             return {"bundles": self.bundles}
+        if method == "GET" and url.endswith("/listings/en-US"):
+            return {"title": "Forum Index", "shortDescription": "Old summary", "fullDescription": "Old description"}
+        if method == "PATCH" and url.endswith("/listings/en-US"):
+            return payload
         if "uploadType=media" in url:
             return {"versionCode": self.upload_code, "sha256": "expected"}
-        if url.endswith(":commit") and self.fail_commit:
+        if ":commit" in url and self.fail_commit:
             raise RuntimeError("Commit rejected")
         return {}
 
@@ -101,6 +105,20 @@ class PublisherTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Commit rejected"):
             self.publish(api)
         self.assertEqual(api.calls[-1][0], "DELETE")
+
+    def test_listing_preview_patches_only_changed_text_and_discards_the_edit(self):
+        api = FakeAPI()
+        publisher.update_listing(api, "preview")
+        self.assertEqual([method for method, _, _ in api.calls], ["POST", "GET", "PATCH", "POST", "DELETE"])
+        self.assertEqual(set(api.calls[2][2]), {"shortDescription", "fullDescription"})
+        self.assertTrue(api.calls[3][1].endswith(":validate"))
+
+    def test_listing_save_leaves_changes_for_manual_review(self):
+        api = FakeAPI()
+        publisher.update_listing(api, "save")
+        self.assertTrue(api.calls[-1][1].endswith(
+            ":commit?changesNotSentForReview=true&changesInReviewBehavior=ERROR_IF_IN_REVIEW"
+        ))
 
 
 if __name__ == "__main__":

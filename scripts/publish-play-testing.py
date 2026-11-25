@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Publish an already signed release bundle to an explicitly allowed Play testing track."""
+"""Manage Forum Index Play testing releases and English listing text."""
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -13,6 +14,7 @@ import urllib.request
 PACKAGE = "com.musaraj.forumindex"
 API = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{PACKAGE}/edits"
 UPLOAD = f"https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/{PACKAGE}/edits"
+ENGLISH_LISTING = Path(__file__).resolve().parents[1] / "store/listings/en-US"
 
 
 def version_code(tag):
@@ -110,15 +112,67 @@ def publish(api, tag, track, code, data, digest):
                 print("Could not discard the edit; it will expire automatically.")
 
 
+def update_listing(api, mode):
+    fields = {
+        "title": ("title.txt", 30),
+        "shortDescription": ("short-description.txt", 80),
+        "fullDescription": ("full-description.txt", 4000),
+    }
+    desired = {}
+    for field, (filename, limit) in fields.items():
+        value = (ENGLISH_LISTING / filename).read_text(encoding="utf-8").strip()
+        if not 0 < len(value) <= limit:
+            raise ValueError(f"{filename} must be between 1 and {limit} characters")
+        desired[field] = value
+
+    edit = api.call("POST", API, {})["id"]
+    base = f"{API}/{urllib.parse.quote(edit, safe='')}"
+    listing_url = base + "/listings/en-US"
+    committed = False
+    try:
+        current = api.call("GET", listing_url)
+        changed = {field: value for field, value in desired.items() if current.get(field) != value}
+        if not changed:
+            print("The English listing already matches the repository copy.")
+            return
+        for field, value in changed.items():
+            print("\n".join(difflib.unified_diff(
+                current.get(field, "").splitlines(), value.splitlines(),
+                f"Play/{field}", f"repository/{field}", lineterm="",
+            )))
+        updated = api.call("PATCH", listing_url, changed)
+        if any(updated.get(field) != value for field, value in changed.items()):
+            raise ValueError("Play returned different listing text after the update")
+        api.call("POST", base + ":validate")
+        if mode == "save":
+            api.call("POST", base + ":commit?changesNotSentForReview=true&changesInReviewBehavior=ERROR_IF_IN_REVIEW")
+            committed = True
+            print("Saved the English listing in Play Console for manual review submission.")
+        else:
+            print("Validated the English listing in a temporary edit.")
+    finally:
+        if not committed:
+            api.call("DELETE", base)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tag", required=True)
+    parser.add_argument("--tag")
+    parser.add_argument("--listing", choices=("preview", "save"))
     parser.add_argument("--track", default="internal")
     parser.add_argument("--bundle", type=Path)
     parser.add_argument("--checksums", type=Path)
     parser.add_argument("--check-inputs", action="store_true")
     parser.add_argument("--check-access", action="store_true")
     args = parser.parse_args()
+    if args.listing:
+        token = os.environ.get("PLAY_ACCESS_TOKEN")
+        if not token:
+            raise ValueError("PLAY_ACCESS_TOKEN is required")
+        update_listing(PlayAPI(token), args.listing)
+        return
+    if not args.tag:
+        parser.error("--tag is required for testing releases")
     code = version_code(args.tag)
     check_track(args.track, os.environ.get("PLAY_TEST_TRACKS", "internal"))
     if args.check_inputs:

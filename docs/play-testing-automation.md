@@ -50,3 +50,7 @@ For a closed-testing track, first create/configure it in Play Console and add it
 If Google rejects a release because Console setup or review is required, resolve that requirement there. The automation reports the error without silently switching to draft or bypassing review. Check the upload job's final result before assuming testers can install the version.
 
 Run the offline publisher checks with `python3 -m unittest discover -s scripts -p 'test_publish_play_testing.py' -v`.
+
+## English store listing
+
+The same workflow uses the service account's app-scoped **Manage store presence** permission to edit the English title and descriptions in `store/listings/en-US/`. Run **Publish Play testing** on `main` with `listing=preview` to validate the text and discard the temporary edit. Use `listing=save` to save the text for manual submission in Play Console's Publishing overview. Leave the tag blank for listing runs. Saving fails if changes are already in review.

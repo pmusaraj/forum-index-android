@@ -14,9 +14,17 @@ on:
         type: boolean
   workflow_dispatch:
     inputs:
+      listing:
+        description: Preview or save the English store listing for review
+        type: choice
+        options:
+          - none
+          - preview
+          - save
+        default: none
       tag:
-        description: Existing GitHub release tag containing a signed AAB
-        required: true
+        description: Existing release tag (required for testing releases)
+        required: false
         type: string
       track:
         description: Testing track ID (must be in PLAY_TEST_TRACKS)
@@ -53,11 +61,13 @@ jobs:
           PROVIDER: ${{ vars.PLAY_WIF_PROVIDER }}
           SERVICE_ACCOUNT: ${{ vars.PLAY_SERVICE_ACCOUNT }}
           VERIFY_ACCESS: ${{ inputs.verify_access }}
+          LISTING: ${{ inputs.listing }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           test -n "$PROVIDER" || { echo 'Configure PLAY_WIF_PROVIDER'; exit 1; }
           test -n "$SERVICE_ACCOUNT" || { echo 'Configure PLAY_SERVICE_ACCOUNT'; exit 1; }
+          if [[ -n "$LISTING" && "$LISTING" != none ]]; then exit 0; fi
           python3 scripts/publish-play-testing.py --tag "$TAG" --track "$TRACK" --check-inputs
           if [[ "$VERIFY_ACCESS" == true ]]; then exit 0; fi
           mkdir -p "$RUNNER_TEMP/play"
@@ -71,14 +81,19 @@ jobs:
           token_format: access_token
           access_token_scopes: https://www.googleapis.com/auth/androidpublisher
           create_credentials_file: false
-      - name: Upload and release to testing
+      - name: Update Play testing or listing
         env:
           PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
           TAG: ${{ inputs.tag }}
           TRACK: ${{ inputs.track }}
           PLAY_TEST_TRACKS: ${{ vars.PLAY_TEST_TRACKS || 'internal' }}
           VERIFY_ACCESS: ${{ inputs.verify_access }}
+          LISTING: ${{ inputs.listing }}
         run: |
+          if [[ -n "$LISTING" && "$LISTING" != none ]]; then
+            python3 scripts/publish-play-testing.py --listing "$LISTING"
+            exit 0
+          fi
           if [[ "$VERIFY_ACCESS" == true ]]; then
             python3 scripts/publish-play-testing.py --tag "$TAG" --track "$TRACK" --check-access
             exit 0
