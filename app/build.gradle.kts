@@ -45,6 +45,9 @@ android {
     buildTypes {
         release {
             isDebuggable = false
+            optimization {
+                enable = true
+            }
             if (hasUploadSigning) signingConfig = signingConfigs.getByName("upload")
         }
     }

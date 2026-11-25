@@ -1,0 +1,5 @@
+# Markwon checks for these optional decoders before loading them. The reader
+# supplies its own bitmap loader, so neither library is bundled.
+-dontwarn com.caverock.androidsvg.SVG
+-dontwarn com.caverock.androidsvg.SVGParseException
+-dontwarn pl.droidsonroids.gif.GifDrawable

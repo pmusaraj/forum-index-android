@@ -19,6 +19,8 @@ Watch the **Release APK** workflow in the Actions tab. If a run fails before pub
 
 The ordinary CI workflow also runs tests, lint, and unsigned build checks for pushes to `main` and pull requests. It does not receive signing credentials. Release actions are pinned to commit SHAs, Gradle wrapper validation is enabled, and signing builds do not save Gradle caches.
 
+Release builds use R8 to shrink, optimize, and obfuscate code and shrink resources. Test a signed release APK before tagging an update. The AAB includes the matching obfuscation map for Play. To inspect the local optimization scores, open `app/build/outputs/mapping/release/configanalyzer.html` after a release build.
+
 ## Signing
 
 The repository uses a dedicated GitHub APK signing key. Keep the same key for every update. Its certificate SHA-256 fingerprint is:
