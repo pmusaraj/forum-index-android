@@ -47,4 +47,8 @@ The interface and native Markdown reader bundle Source Sans 3 from [Adobe's font
 
 ## Store releases
 
-See the [Google Play release guide](docs/play-store-release.md) and the [Galaxy Store and AppGallery submission guide](docs/other-android-stores.md). Listing copy, release notes, and the [icon, feature graphic, and Android screenshot gallery](store/index.html) are in `store/`. The [asset guide](store/README.md) explains uploads and regeneration. Use the [data inventory](docs/privacy-data-inventory.md) when reviewing store disclosures.
+See the [Google Play release guide](docs/play-store-release.md) and the [Galaxy Store and AppGallery submission guide](docs/other-android-stores.md). Listing copy, release notes, and the [icon, feature graphic, and Android screenshot gallery](store/index.html) are in `store/`. The [asset guide](store/README.md) explains uploads and regeneration. Use the [data inventory](docs/privacy-data-inventory.md) when reviewing store disclosures. The same listing copy and graphics are mirrored as [Fastlane metadata](https://izzyondroid.org/docs/general/Fastlane/) in `fastlane/metadata/android/` for F-Droid-compatible repositories such as IzzyOnDroid.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
